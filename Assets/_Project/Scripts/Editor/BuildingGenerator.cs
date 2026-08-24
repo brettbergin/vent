@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Unity.AI.Navigation;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.AI;
 using Vent.Core.Utility;
 using Vent.Enemies.Spawning;
 

@@ -195,6 +195,7 @@ namespace Vent.Editor
             agent.stoppingDistance = 1f;
             agent.autoBraking = true;
             agent.obstacleAvoidanceType = ObstacleAvoidanceType.MedQualityObstacleAvoidance;
+            agent.enabled = false; // enabled by Zombie only once it stands on the NavMesh
             root.AddComponent<PooledObject>();
             var zombie = root.AddComponent<Zombie>();
 

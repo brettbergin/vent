@@ -29,6 +29,7 @@ namespace Vent.Gameplay.Levels
 
         private LevelRules rules;
         private float runStartTime;
+        private float runEndTime;
         private int headshots;
         private bool running;
 
@@ -38,7 +39,8 @@ namespace Vent.Gameplay.Levels
         public int KillsRequired => rules?.KillsRequired ?? 0;
         public int TotalKills => rules?.TotalKills ?? 0;
         public int Headshots => headshots;
-        public float ElapsedSeconds => running ? Time.time - runStartTime : 0f;
+        /// <summary>Seconds since the run started; frozen at the end of the run.</summary>
+        public float ElapsedSeconds => running ? Time.time - runStartTime : Mathf.Max(0f, runEndTime - runStartTime);
 
         public void Configure(DifficultyProfile profile, ZombieSpawner zombieSpawner, KillEventChannel killChannel,
             LevelEventChannel levelEvent, IntEventChannel killsEvent)
@@ -83,6 +85,11 @@ namespace Vent.Gameplay.Levels
         /// <summary>Stop spawning; zombies already out stay until cleared by <see cref="ClearBuilding"/>.</summary>
         public void EndRun()
         {
+            if (running)
+            {
+                runEndTime = Time.time;
+            }
+
             running = false;
             spawner?.StopSpawning();
         }

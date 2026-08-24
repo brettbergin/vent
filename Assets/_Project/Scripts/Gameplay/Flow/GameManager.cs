@@ -261,7 +261,7 @@ namespace Vent.Gameplay.Flow
                 level = building.Director.Level;
                 kills = building.Director.TotalKills;
                 headshots = building.Director.Headshots;
-                seconds = Time.time - (Time.time - building.Director.ElapsedSeconds);
+                seconds = building.Director.ElapsedSeconds;
             }
 
             bool newRecord = scores.Record(level, kills, seconds);

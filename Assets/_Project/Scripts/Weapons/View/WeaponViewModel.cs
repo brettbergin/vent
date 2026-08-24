@@ -53,6 +53,7 @@ namespace Vent.Weapons.View
         private float reloadDuration = 1f;
         private float drawT = 1f;
         private float drawDuration = 0.3f;
+        private Vector3 restPosition;
 
         /// <summary>Shot origin. Falls back to this transform if none is assigned.</summary>
         public Transform Muzzle => muzzle != null ? muzzle : transform;
@@ -84,6 +85,7 @@ namespace Vent.Weapons.View
 
         private void OnEnable()
         {
+            restPosition = aiming ? aimPosition : hipPosition;
             swayPos = Vector3.zero;
             swayRot = Vector3.zero;
             kick = 0f;
@@ -94,11 +96,11 @@ namespace Vent.Weapons.View
         {
             float dt = Time.deltaTime;
 
-            // Rest pose (hip vs aim)
+            // Rest pose (hip vs aim). Damped separately from the composed local position so the
+            // per-frame offsets below never feed back into next frame's base.
             Vector3 targetRest = aiming ? aimPosition : hipPosition;
-            Vector3 rest = MathUtil.Damp(transform.localPosition, targetRest, aimSharpness, dt);
-            // Only the base pose is damped; the offsets below are recomputed from scratch each frame.
-            Vector3 basePos = rest;
+            restPosition = MathUtil.Damp(restPosition, targetRest, aimSharpness, dt);
+            Vector3 basePos = restPosition;
 
             // Sway: the gun lags behind look input.
             float swayScale = aiming ? 0.3f : 1f;

@@ -80,9 +80,10 @@ namespace Vent.Weapons.Runtime
             SlotIndex = slotIndex;
             ctx = context;
 
-            Progression = new WeaponProgression(definition.LevelCurve != null
+            IWeaponLevelTable table = definition.LevelCurve != null
                 ? definition.LevelCurve
-                : FlatLevelTable.Instance);
+                : (IWeaponLevelTable)FlatLevelTable.Instance;
+            Progression = new WeaponProgression(table);
             Progression.LevelUp += OnLevelUp;
 
             RecomputeStats();

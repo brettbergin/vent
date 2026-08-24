@@ -8,6 +8,7 @@ using Vent.Player.Health;
 using Vent.Player.Input;
 using Vent.Player.Movement;
 using Vent.Weapons;
+using Vent.Weapons.Runtime;
 
 namespace Vent.Player
 {

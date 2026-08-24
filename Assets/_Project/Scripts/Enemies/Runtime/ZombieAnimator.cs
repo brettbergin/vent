@@ -72,7 +72,14 @@ namespace Vent.Enemies.Runtime
             flash = 0f;
             flinch = 0f;
             transform.localPosition = Vector3.zero;
+            transform.localRotation = Quaternion.identity;
             transform.localScale = Vector3.one;
+            if (body != null)
+            {
+                body.localPosition = bodyRest;
+                body.localRotation = Quaternion.identity;
+            }
+
             ApplyFlash(0f);
         }
 

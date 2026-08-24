@@ -12,6 +12,12 @@ namespace Vent.Core.Utility
         }
 
         /// <inheritdoc cref="Damp(float,float,float,float)"/>
+        public static Vector2 Damp(Vector2 current, Vector2 target, float sharpness, float deltaTime)
+        {
+            return Vector2.Lerp(current, target, 1f - Mathf.Exp(-sharpness * deltaTime));
+        }
+
+        /// <inheritdoc cref="Damp(float,float,float,float)"/>
         public static Vector3 Damp(Vector3 current, Vector3 target, float sharpness, float deltaTime)
         {
             return Vector3.Lerp(current, target, 1f - Mathf.Exp(-sharpness * deltaTime));
