@@ -1,0 +1,64 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+  <Style src="Theme.uss" />
+  <Style src="Hud.uss" />
+  <ui:VisualElement name="hud" class="hud" picking-mode="Ignore">
+    <ui:VisualElement name="vignette" class="vignette" picking-mode="Ignore" />
+
+    <ui:VisualElement name="damage-indicator" class="damage-indicator" picking-mode="Ignore">
+      <ui:VisualElement class="damage-indicator__arrow" picking-mode="Ignore" />
+    </ui:VisualElement>
+
+    <ui:VisualElement name="crosshair" class="crosshair" picking-mode="Ignore">
+      <ui:VisualElement name="ch-top" class="crosshair__bar crosshair__bar--top" picking-mode="Ignore" />
+      <ui:VisualElement name="ch-bottom" class="crosshair__bar crosshair__bar--bottom" picking-mode="Ignore" />
+      <ui:VisualElement name="ch-left" class="crosshair__bar crosshair__bar--left" picking-mode="Ignore" />
+      <ui:VisualElement name="ch-right" class="crosshair__bar crosshair__bar--right" picking-mode="Ignore" />
+      <ui:VisualElement class="crosshair__dot" picking-mode="Ignore" />
+    </ui:VisualElement>
+
+    <ui:VisualElement name="hitmarker" class="hitmarker" picking-mode="Ignore">
+      <ui:VisualElement class="hitmarker__bar" style="rotate: 45deg;" picking-mode="Ignore" />
+      <ui:VisualElement class="hitmarker__bar" style="rotate: 135deg;" picking-mode="Ignore" />
+      <ui:VisualElement class="hitmarker__bar" style="rotate: 225deg;" picking-mode="Ignore" />
+      <ui:VisualElement class="hitmarker__bar" style="rotate: 315deg;" picking-mode="Ignore" />
+    </ui:VisualElement>
+
+    <ui:VisualElement name="top" class="top-center" picking-mode="Ignore">
+      <ui:Label name="level-label" text="LEVEL 1" class="label--small" />
+      <ui:Label name="kills-label" text="0 / 8" class="label--medium label--accent" />
+    </ui:VisualElement>
+
+    <ui:VisualElement name="bottom-left" class="bottom-left" picking-mode="Ignore">
+      <ui:Label name="health-label" text="100" class="label--big" />
+      <ui:VisualElement class="bar bar--health" picking-mode="Ignore">
+        <ui:VisualElement name="health-fill" class="bar__fill bar__fill--health" picking-mode="Ignore" />
+      </ui:VisualElement>
+    </ui:VisualElement>
+
+    <ui:VisualElement name="bottom-right" class="bottom-right" picking-mode="Ignore">
+      <ui:Label name="weapon-name" text="SMG" class="label--small" />
+      <ui:VisualElement name="ammo" class="ammo" picking-mode="Ignore">
+        <ui:Label name="ammo-mag" text="30" class="ammo__mag" />
+        <ui:Label name="ammo-reserve" text="/ 120" class="ammo__reserve" />
+      </ui:VisualElement>
+      <ui:Label name="reloading" text="" class="reloading" />
+      <ui:Label name="weapon-level" text="LV 1" class="label--small" />
+      <ui:VisualElement class="bar bar--xp" picking-mode="Ignore">
+        <ui:VisualElement name="xp-fill" class="bar__fill bar__fill--xp" picking-mode="Ignore" />
+      </ui:VisualElement>
+      <ui:VisualElement name="slots" class="weapon-slots" picking-mode="Ignore">
+        <ui:Label name="slot-0" text="1" class="slot slot--active" />
+        <ui:Label name="slot-1" text="2" class="slot" />
+      </ui:VisualElement>
+    </ui:VisualElement>
+
+    <ui:VisualElement name="banner" class="banner" picking-mode="Ignore">
+      <ui:Label name="banner-title" text="LEVEL 2" class="banner__title" />
+      <ui:Label name="banner-sub" text="AMMO RESTOCKED" class="banner__sub" />
+    </ui:VisualElement>
+
+    <ui:VisualElement name="toast" class="toast" picking-mode="Ignore">
+      <ui:Label name="toast-text" text="SMG LEVEL 2" class="toast__text" />
+    </ui:VisualElement>
+  </ui:VisualElement>
+</ui:UXML>

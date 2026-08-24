@@ -1,0 +1,16 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+  <Style src="Theme.uss" />
+  <ui:VisualElement name="root" class="screen screen--dim">
+    <ui:VisualElement class="panel">
+      <ui:Label text="OVERRUN" class="title" />
+      <ui:Label text="THE BUILDING BELONGS TO THEM" class="subtitle" />
+      <ui:VisualElement class="stat-row"><ui:Label text="Level reached" /><ui:Label name="stat-level" text="1" class="value" /></ui:VisualElement>
+      <ui:VisualElement class="stat-row"><ui:Label text="Zombies killed" /><ui:Label name="stat-kills" text="0" class="value" /></ui:VisualElement>
+      <ui:VisualElement class="stat-row"><ui:Label text="Headshots" /><ui:Label name="stat-headshots" text="0" class="value" /></ui:VisualElement>
+      <ui:VisualElement class="stat-row"><ui:Label text="Survived" /><ui:Label name="stat-time" text="0:00" class="value" /></ui:VisualElement>
+      <ui:Label name="record" text="NEW RECORD" class="record hidden" />
+      <ui:Button name="restart" text="TRY AGAIN" class="menu-button" style="margin-top: 16px;" />
+      <ui:Button name="menu" text="MAIN MENU" class="menu-button" />
+    </ui:VisualElement>
+  </ui:VisualElement>
+</ui:UXML>

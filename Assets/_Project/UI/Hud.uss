@@ -1,0 +1,69 @@
+.hud { position: absolute; left: 0; top: 0; right: 0; bottom: 0; color: var(--fg); }
+
+/* Vignette: a full-screen red overlay whose opacity tracks recent damage / low health. */
+.vignette {
+    position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+    background-color: rgb(160, 0, 0);
+    opacity: 0;
+}
+
+/* Crosshair: four bars whose distance from the centre follows weapon spread. */
+.crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+.crosshair__bar { position: absolute; background-color: rgb(240, 240, 240); }
+.crosshair__bar--top, .crosshair__bar--bottom { width: 2px; height: 10px; left: -1px; }
+.crosshair__bar--left, .crosshair__bar--right { width: 10px; height: 2px; top: -1px; }
+.crosshair__dot { position: absolute; width: 2px; height: 2px; left: -1px; top: -1px; background-color: rgb(240,240,240); }
+
+.hitmarker { position: absolute; left: 50%; top: 50%; width: 0; height: 0; opacity: 0; }
+.hitmarker__bar { position: absolute; width: 2px; height: 12px; left: -1px; top: -18px; background-color: rgb(255, 255, 255); transform-origin: 1px 18px; }
+.hitmarker--head .hitmarker__bar { background-color: var(--danger); }
+
+.damage-indicator {
+    position: absolute; left: 50%; top: 50%;
+    width: 0; height: 0; opacity: 0;
+}
+.damage-indicator__arrow {
+    position: absolute; left: -14px; top: -90px;
+    width: 28px; height: 12px;
+    background-color: var(--danger);
+    border-top-left-radius: 14px; border-top-right-radius: 14px;
+}
+
+.bottom-left { position: absolute; left: 32px; bottom: 32px; width: 320px; }
+.bottom-right { position: absolute; right: 32px; bottom: 32px; align-items: flex-end; }
+.top-center { position: absolute; top: 24px; left: 0; right: 0; align-items: center; }
+
+.label--big { font-size: 40px; -unity-font-style: bold; }
+.label--medium { font-size: 22px; }
+.label--small { font-size: 14px; color: var(--muted); letter-spacing: 2px; }
+.label--accent { color: var(--accent); }
+
+.bar { height: 10px; background-color: rgba(255,255,255,0.12); border-radius: 3px; overflow: hidden; }
+.bar__fill { height: 100%; width: 100%; }
+.bar__fill--health { background-color: var(--health); }
+.bar__fill--xp { background-color: var(--xp); }
+.bar--health { width: 100%; margin-top: 6px; }
+.bar--xp { width: 220px; margin-top: 4px; }
+
+.ammo { flex-direction: row; align-items: flex-end; }
+.ammo__mag { font-size: 44px; -unity-font-style: bold; }
+.ammo__reserve { font-size: 20px; color: var(--muted); margin-left: 8px; margin-bottom: 8px; }
+.ammo--empty .ammo__mag { color: var(--danger); }
+.reloading { color: var(--accent); font-size: 14px; letter-spacing: 3px; height: 18px; }
+
+.weapon-slots { flex-direction: row; margin-top: 6px; }
+.slot { width: 26px; height: 26px; margin-left: 6px; border-width: 1px; border-color: rgba(255,255,255,0.25); -unity-text-align: middle-center; font-size: 14px; color: var(--muted); border-radius: 3px; }
+.slot--active { border-color: var(--accent); color: var(--accent); background-color: rgba(255,176,48,0.15); }
+
+.banner {
+    position: absolute; top: 30%; left: 0; right: 0;
+    align-items: center; opacity: 0;
+    transition-property: opacity, translate; transition-duration: 0.35s;
+}
+.banner__title { font-size: 64px; -unity-font-style: bold; letter-spacing: 10px; color: var(--accent); }
+.banner__sub { font-size: 18px; letter-spacing: 4px; color: var(--fg); }
+.banner--visible { opacity: 1; }
+
+.toast { position: absolute; top: 44%; left: 0; right: 0; align-items: center; opacity: 0; transition-property: opacity; transition-duration: 0.3s; }
+.toast__text { font-size: 22px; letter-spacing: 3px; color: var(--xp); -unity-font-style: bold; }
+.toast--visible { opacity: 1; }

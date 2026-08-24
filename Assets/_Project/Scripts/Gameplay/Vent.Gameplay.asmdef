@@ -1,0 +1,20 @@
+{
+  "name": "Vent.Gameplay",
+  "rootNamespace": "Vent.Gameplay",
+  "references": [
+    "Vent.Core",
+    "Vent.Player",
+    "Vent.Weapons",
+    "Vent.Enemies",
+    "Unity.InputSystem"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

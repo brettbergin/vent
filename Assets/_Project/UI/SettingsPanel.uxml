@@ -1,0 +1,7 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+  <ui:VisualElement name="settings" class="settings">
+    <ui:Slider name="sensitivity" label="Sensitivity" low-value="0.2" high-value="3" value="1" show-input-field="true" />
+    <ui:Toggle name="invert-y" label="Invert Y" />
+    <ui:Slider name="volume" label="Volume" low-value="0" high-value="1" value="0.8" />
+  </ui:VisualElement>
+</ui:UXML>

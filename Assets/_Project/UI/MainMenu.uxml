@@ -1,0 +1,15 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+  <ui:Template name="SettingsPanel" src="SettingsPanel.uxml" />
+  <Style src="Theme.uss" />
+  <ui:VisualElement name="root" class="screen screen--dim">
+    <ui:VisualElement class="panel">
+      <ui:Label text="VENT" class="title" />
+      <ui:Label text="THEY COME THROUGH THE DUCTS" class="subtitle" />
+      <ui:Label name="best-level" text="BEST LEVEL: —" class="label--small" style="margin-bottom: 12px; color: var(--muted);" />
+      <ui:Button name="play" text="PLAY" class="menu-button" />
+      <ui:Button name="settings-toggle" text="SETTINGS" class="menu-button" />
+      <ui:Button name="quit" text="QUIT" class="menu-button" />
+      <ui:Instance template="SettingsPanel" name="settings-panel" class="hidden" />
+    </ui:VisualElement>
+  </ui:VisualElement>
+</ui:UXML>

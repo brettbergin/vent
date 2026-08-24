@@ -1,0 +1,81 @@
+/* Shared look for every screen. Dark, high-contrast, no images: everything is USS. */
+:root {
+    --bg: rgba(8, 10, 12, 0.92);
+    --panel: rgba(18, 22, 26, 0.96);
+    --fg: rgb(232, 236, 240);
+    --muted: rgb(150, 160, 170);
+    --accent: rgb(255, 176, 48);
+    --danger: rgb(224, 64, 48);
+    --health: rgb(96, 208, 112);
+    --xp: rgb(96, 160, 255);
+}
+
+.screen {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    align-items: center;
+    justify-content: center;
+    color: var(--fg);
+}
+
+.screen--dim { background-color: var(--bg); }
+
+.panel {
+    background-color: var(--panel);
+    border-radius: 6px;
+    padding: 28px 36px;
+    min-width: 420px;
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.title {
+    font-size: 56px;
+    -unity-font-style: bold;
+    letter-spacing: 6px;
+    color: var(--accent);
+    margin-bottom: 4px;
+}
+
+.subtitle {
+    font-size: 16px;
+    color: var(--muted);
+    margin-bottom: 24px;
+    letter-spacing: 2px;
+}
+
+.menu-button {
+    height: 46px;
+    margin: 6px 0;
+    font-size: 20px;
+    letter-spacing: 2px;
+    background-color: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.12);
+    border-width: 1px;
+    border-radius: 4px;
+    color: var(--fg);
+    -unity-text-align: middle-center;
+    transition-property: background-color, border-color;
+    transition-duration: 0.08s;
+}
+
+.menu-button:hover { background-color: rgba(255, 176, 48, 0.18); border-color: var(--accent); }
+.menu-button:active { background-color: rgba(255, 176, 48, 0.35); }
+.menu-button:focus { border-color: var(--accent); }
+
+.stat-row {
+    flex-direction: row;
+    justify-content: space-between;
+    margin: 4px 0;
+    font-size: 18px;
+}
+
+.stat-row .value { color: var(--accent); -unity-font-style: bold; }
+.record { color: var(--accent); font-size: 20px; -unity-font-style: bold; margin: 8px 0; }
+
+.settings { margin-top: 18px; padding-top: 14px; border-top-width: 1px; border-top-color: rgba(255, 255, 255, 0.08); }
+.settings .unity-base-field__label { min-width: 140px; color: var(--muted); }
+.settings .unity-base-slider__dragger { background-color: var(--accent); border-width: 0; }
+.settings .unity-base-slider__tracker { background-color: rgba(255,255,255,0.15); }
+.settings .unity-toggle__checkmark { background-color: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); }
+.hidden { display: none; }
