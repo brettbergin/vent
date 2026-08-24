@@ -206,7 +206,8 @@ namespace Vent.Enemies.Spawning
 
                 float distanceScore = Mathf.Exp(-Mathf.Abs(distance - idealDistance) / idealDistance);
 
-                Vector3 toVent = vent.GratePosition - eye;
+                // Test a point just in front of the grate: the grate itself sits inside the wall.
+                Vector3 toVent = vent.transform.position + vent.Facing * 0.3f - eye;
                 bool inFront = Vector3.Dot(forward, toVent.normalized) > 0.3f;
                 bool occluded = Physics.Raycast(eye, toVent.normalized, toVent.magnitude, Layers.OcclusionMask, QueryTriggerInteraction.Ignore);
                 float visibilityScore = (!inFront || occluded) ? 1f : 0.25f;

@@ -25,8 +25,8 @@ namespace Vent.Core.Utility
         /// <summary>What bullets can hit: the world and zombies, never the player or the view-model.</summary>
         public static int ShootableMask => LayerMask.GetMask(Environment, Zombie, Vent);
 
-        /// <summary>What blocks line of sight for spawn selection.</summary>
-        public static int OcclusionMask => LayerMask.GetMask(Environment, Vent);
+        /// <summary>What blocks line of sight for spawn selection (walls and props only).</summary>
+        public static int OcclusionMask => LayerMask.GetMask(Environment);
 
         /// <summary>All layer names the project needs, in a stable order (used by the bootstrap).</summary>
         public static readonly string[] All = { Player, Zombie, Environment, Vent, Projectile, WeaponView };

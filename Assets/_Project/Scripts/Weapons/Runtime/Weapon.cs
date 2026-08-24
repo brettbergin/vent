@@ -61,6 +61,8 @@ namespace Vent.Weapons.Runtime
         private bool triggerPulled;
         private bool aiming;
         private bool active = true;
+        private float lastPublishedSpread = -1f;
+        private float nextSpreadPublish;
 
         // ------------------------------------------------------------------ construction
 
@@ -136,6 +138,14 @@ namespace Vent.Weapons.Runtime
             State = WeaponState.Holstered;
             triggerHeld = false;
             triggerPulled = false;
+
+            // A muzzle flash may still be parented under the muzzle; return it before we go inactive,
+            // otherwise it would sit checked-out of its pool until this weapon is drawn again.
+            foreach (PooledObject effect in GetComponentsInChildren<PooledObject>(includeInactive: true))
+            {
+                effect.Release();
+            }
+
             gameObject.SetActive(false);
         }
 
@@ -231,6 +241,14 @@ namespace Vent.Weapons.Runtime
             if (viewModel != null && ctx.Holder != null)
             {
                 viewModel.SetMotion(movement, ctx.Holder.IsGrounded, ctx.Holder.LookDelta);
+            }
+
+            // The crosshair blooms with movement and recovers between shots; push those changes
+            // at ~20 Hz rather than every frame.
+            if (now >= nextSpreadPublish && Mathf.Abs(CurrentSpreadDegrees - lastPublishedSpread) > 0.05f)
+            {
+                nextSpreadPublish = now + 0.05f;
+                PublishHud();
             }
 
             switch (State)
@@ -429,6 +447,12 @@ namespace Vent.Weapons.Runtime
         /// <summary>Push a HUD snapshot; cheap enough to call on every state change.</summary>
         public void PublishHud()
         {
+            if (State == WeaponState.Holstered)
+            {
+                return; // only the weapon in hand owns the HUD
+            }
+
+            lastPublishedSpread = CurrentSpreadDegrees;
             ctx.HudChannel?.Raise(new WeaponHudInfo(
                 Definition.DisplayName,
                 SlotIndex,

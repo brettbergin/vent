@@ -74,13 +74,54 @@ namespace Vent.Editor
         private static void ConfigureCollisionMatrix()
         {
             int weaponView = Layers.WeaponViewIndex;
+            int zombie = Layers.ZombieIndex;
+            int vent = Layers.VentIndex;
+            if (weaponView < 0 || zombie < 0 || vent < 0)
+            {
+                throw new System.InvalidOperationException("Layers were not created; run EnsureLayers first.");
+            }
+
             for (int layer = 0; layer < 32; layer++)
             {
                 Physics.IgnoreLayerCollision(weaponView, layer, true);
             }
 
-            Physics.IgnoreLayerCollision(Layers.ZombieIndex, Layers.ZombieIndex, true);
-            Physics.IgnoreLayerCollision(Layers.ZombieIndex, Layers.VentIndex, true);
+            Physics.IgnoreLayerCollision(zombie, zombie, true);
+            Physics.IgnoreLayerCollision(zombie, vent, true);
+
+            // Physics.IgnoreLayerCollision updates the live matrix; write the serialized matrix too so
+            // the change is guaranteed to reach DynamicsManager.asset in a headless -quit run.
+            Object dynamics = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/DynamicsManager.asset")[0];
+            var so = new SerializedObject(dynamics);
+            SerializedProperty matrix = so.FindProperty("m_LayerCollisionMatrix");
+            if (matrix != null && matrix.arraySize == 32)
+            {
+                for (int i = 0; i < 32; i++)
+                {
+                    SerializedProperty row = matrix.GetArrayElementAtIndex(i);
+                    uint bits = row.uintValue;
+                    bits &= ~(1u << weaponView);
+                    if (i == weaponView)
+                    {
+                        bits = 0u;
+                    }
+
+                    if (i == zombie)
+                    {
+                        bits &= ~(1u << zombie);
+                        bits &= ~(1u << vent);
+                    }
+
+                    if (i == vent)
+                    {
+                        bits &= ~(1u << zombie);
+                    }
+
+                    row.uintValue = bits;
+                }
+
+                so.ApplyModifiedPropertiesWithoutUndo();
+            }
         }
 
         private static void ConfigurePlayerSettings()
@@ -95,7 +136,8 @@ namespace Vent.Editor
             PlayerSettings.resizableWindow = true;
         }
 
-        private static void ConfigureBuildScenes()
+        /// <summary>Scene list in build order. Re-run after scenes are generated so the entries carry real GUIDs.</summary>
+        public static void ConfigureBuildScenes()
         {
             var scenes = new EditorBuildSettingsScene[SceneNames.BuildOrder.Length];
             for (int i = 0; i < scenes.Length; i++)

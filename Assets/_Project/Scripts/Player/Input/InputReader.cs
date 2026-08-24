@@ -50,6 +50,11 @@ namespace Vent.Player.Input
 
         private InputAction move, look, lookAnalog, jump, sprint, fire, aim, reload, weapon1, weapon2, cycle, swap, pause, unpause;
 
+        private const float ScrollNotch = 1f;
+        private const float ScrollCooldown = 0.15f;
+        private float scrollAccumulator;
+        private float nextScrollTime;
+
         /// <summary>True if the last input that changed a gameplay value came from a gamepad; drives look scaling & UI hints.</summary>
         public bool UsingGamepad { get; private set; }
 
@@ -159,6 +164,7 @@ namespace Vent.Player.Input
 
         private void ClearHeldState()
         {
+            scrollAccumulator = 0f;
             Move = Vector2.zero;
             LookDelta = Vector2.zero;
             LookAnalog = Vector2.zero;
@@ -217,13 +223,22 @@ namespace Vent.Player.Input
         private void OnWeapon1(InputAction.CallbackContext ctx) => WeaponSlotSelected?.Invoke(0);
         private void OnWeapon2(InputAction.CallbackContext ctx) => WeaponSlotSelected?.Invoke(1);
 
+        /// <summary>
+        /// Mouse wheels report ±1 per notch, trackpads a stream of fractional deltas. Accumulate to a
+        /// notch and rate-limit so a flick never flips weapons several times.
+        /// </summary>
         private void OnCycle(InputAction.CallbackContext ctx)
         {
-            float y = ctx.ReadValue<float>();
-            if (Mathf.Abs(y) > 0.01f)
+            scrollAccumulator += ctx.ReadValue<float>();
+            if (Mathf.Abs(scrollAccumulator) < ScrollNotch || Time.unscaledTime < nextScrollTime)
             {
-                WeaponCycled?.Invoke(y > 0f ? -1 : 1);
+                return;
             }
+
+            int direction = scrollAccumulator > 0f ? -1 : 1;
+            scrollAccumulator = 0f;
+            nextScrollTime = Time.unscaledTime + ScrollCooldown;
+            WeaponCycled?.Invoke(direction);
         }
 
         private void OnSwap(InputAction.CallbackContext ctx) => WeaponSwapPressed?.Invoke();

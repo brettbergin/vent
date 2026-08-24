@@ -85,6 +85,10 @@ namespace Vent.Editor
             SetPrivate(flash, "flashLight", light);
             SetPrivate(flash, "visual", visual.transform);
             Layers.SetRecursively(root, Layers.WeaponViewIndex);
+            // Lights are culled per camera by layer. The Player layer carries no renderers and is
+            // visible to both the world camera and the weapon overlay camera, so a light placed
+            // there illuminates the room and the gun alike.
+            lightGo.layer = Layers.PlayerIndex;
             return Save(root);
         }
 
@@ -252,13 +256,14 @@ namespace Vent.Editor
             GameObject frame = Primitive(PrimitiveType.Cube, "Frame", t, Vector3.zero, new Vector3(0.9f, 0.6f, 0.06f), a.VentMetal, collider: true);
             for (int i = 0; i < 4; i++)
             {
-                Primitive(PrimitiveType.Cube, $"Slat{i}", frame.transform, new Vector3(0f, -0.3f + 0.2f * (i + 0.5f), 0.55f),
+                // Children of the scaled frame use frame-local units (±0.5 spans the frame).
+                Primitive(PrimitiveType.Cube, $"Slat{i}", frame.transform, new Vector3(0f, -0.3f + 0.2f * i, 0.55f),
                     new Vector3(0.85f, 0.06f, 0.4f), a.Trim, collider: false);
             }
 
             var grate = new GameObject("Grate");
             grate.transform.SetParent(t, false);
-            grate.transform.localPosition = new Vector3(0f, -0.1f, -0.2f);
+            grate.transform.localPosition = new Vector3(0f, -1.7f, -0.2f); // zombie root (feet); head ends up at grate height
 
             var floor = new GameObject("FloorPoint");
             floor.transform.SetParent(t, false);
@@ -309,7 +314,7 @@ namespace Vent.Editor
             weaponCam.fieldOfView = 55f;
             weaponCam.nearClipPlane = 0.01f;
             weaponCam.farClipPlane = 4f;
-            weaponCam.cullingMask = 1 << Layers.WeaponViewIndex;
+            weaponCam.cullingMask = (1 << Layers.WeaponViewIndex) | (1 << Layers.PlayerIndex); // Player layer = lights only
             weaponCam.clearFlags = CameraClearFlags.Depth;
 
             // URP camera stacking: the weapon camera renders on top so the view-model never clips into walls.

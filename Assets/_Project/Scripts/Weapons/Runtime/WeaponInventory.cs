@@ -174,6 +174,8 @@ namespace Vent.Weapons.Runtime
             {
                 w.RefillAmmo();
             }
+
+            Current?.PublishHud();
         }
 
         public void ResetForNewRun()

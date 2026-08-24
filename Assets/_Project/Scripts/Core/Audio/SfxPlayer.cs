@@ -68,6 +68,7 @@ namespace Vent.Core.Audio
 
             src.transform.position = position;
             src.spatialBlend = spatialBlend;
+            src.ignoreListenerPause = spatialBlend <= 0f; // menus stay audible while the game is paused
             src.pitch = pitch + Random.Range(-pitchJitter, pitchJitter);
             src.volume = Mathf.Clamp01(volume * Volume);
             src.clip = clip;

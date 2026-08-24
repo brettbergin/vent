@@ -124,10 +124,7 @@ namespace Vent.Enemies.Runtime
             float fraction = HealthNormalized;
             stats = newStats;
             health = stats.MaxHealth * fraction;
-            if (agent.enabled)
-            {
-                agent.speed = stats.Speed;
-            }
+            agent.speed = stats.Speed; // legal on a disabled agent; applies once it starts chasing
         }
 
         /// <summary>Instantly remove (run reset). No kill event, no experience.</summary>
@@ -163,12 +160,20 @@ namespace Vent.Enemies.Runtime
                         agent.Warp(emergeTo);
                     }
 
-                    agent.isStopped = false;
+                    if (agent.isOnNavMesh)
+                    {
+                        agent.isStopped = false;
+                    }
+
                     repath.Reset();
                     break;
 
                 case ZombieState.Attacking:
-                    agent.isStopped = true;
+                    if (agent.isOnNavMesh)
+                    {
+                        agent.isStopped = true;
+                    }
+
                     struckThisAttack = false;
                     animator?.PlayAttack(definition.AttackWindup);
                     SfxPlayer.TryPlayAt(SoundId.ZombieAttack, transform.position, 0.8f);
@@ -235,7 +240,11 @@ namespace Vent.Enemies.Runtime
         {
             if (target == null || !target.IsAlive)
             {
-                agent.isStopped = true;
+                if (agent.isOnNavMesh)
+                {
+                    agent.isStopped = true;
+                }
+
                 animator?.SetLocomotion(0f);
                 return;
             }

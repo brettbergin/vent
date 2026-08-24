@@ -1,4 +1,5 @@
 using UnityEngine;
+using Vent.Core.Settings;
 using Vent.Core.Utility;
 using Vent.Player.Input;
 using Vent.Weapons;
@@ -68,7 +69,7 @@ namespace Vent.Player.Movement
         }
 
         /// <summary>Current camera pitch in degrees (negative = looking up).</summary>
-        public float Pitch => pitch + recoilCurrent.x;
+        public float Pitch => pitch - recoilCurrent.x;
 
         public void SetLookEnabled(bool enabled) => lookEnabled = enabled;
         public void SetAiming(bool isAiming) => aiming = isAiming;
@@ -87,6 +88,20 @@ namespace Vent.Player.Movement
             recoilTarget = Vector2.zero;
             recoilCurrent = Vector2.zero;
             Apply();
+        }
+
+        private void OnEnable()
+        {
+            ApplySettings();
+            SettingsStore.Changed += ApplySettings;
+        }
+
+        private void OnDisable() => SettingsStore.Changed -= ApplySettings;
+
+        private void ApplySettings()
+        {
+            sensitivity = SettingsStore.Sensitivity;
+            invertY = SettingsStore.InvertY;
         }
 
         private void Start()

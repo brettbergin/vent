@@ -104,7 +104,7 @@ namespace Vent.Editor
             a.LightPanel = Lit("M_LightPanel", new Color(0.9f, 0.9f, 0.85f), smoothness: 0.5f, emission: new Color(1.0f, 0.95f, 0.8f) * 2.2f);
             a.ZombieSkin = Lit("M_ZombieSkin", new Color(0.42f, 0.55f, 0.36f), smoothness: 0.35f);
             a.ZombieHead = Lit("M_ZombieHead", new Color(0.48f, 0.58f, 0.40f), smoothness: 0.4f);
-            a.GunMetal = Lit("M_GunMetal", new Color(0.13f, 0.14f, 0.15f), smoothness: 0.7f, metallic: 0.9f);
+            a.GunMetal = Lit("M_GunMetal", new Color(0.16f, 0.17f, 0.19f), smoothness: 0.55f, metallic: 0.35f);
             a.GunAccent = Lit("M_GunAccent", new Color(0.55f, 0.45f, 0.30f), smoothness: 0.4f, metallic: 0.2f);
             a.Concrete = Lit("M_Concrete", new Color(0.5f, 0.5f, 0.5f), smoothness: 0.1f);
             a.Tracer = Unlit("M_Tracer", new Color(1f, 0.85f, 0.45f));

@@ -1,5 +1,6 @@
 /* Shared look for every screen. Dark, high-contrast, no images: everything is USS. */
-:root {
+/* Custom properties live on each screen root (UI Toolkit scopes <Style> sheets to the document, so :root never matches). */
+.screen, .hud {
     --bg: rgba(8, 10, 12, 0.92);
     --panel: rgba(18, 22, 26, 0.96);
     --fg: rgb(232, 236, 240);

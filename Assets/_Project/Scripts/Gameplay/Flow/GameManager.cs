@@ -156,7 +156,8 @@ namespace Vent.Gameplay.Flow
 
         private void Pause()
         {
-            if (State == GameState.Playing)
+            // transition != null covers the death delay: the player is dead but the state is still Playing.
+            if (State == GameState.Playing && transition == null)
             {
                 SetState(GameState.Paused);
             }

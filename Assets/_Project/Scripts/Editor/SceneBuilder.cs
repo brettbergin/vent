@@ -150,7 +150,8 @@ namespace Vent.Editor
                 var zombie = (GameObject)PrefabUtility.InstantiatePrefab(a.ZombiePrefab);
                 zombie.name = "MenuZombie";
                 Vector3 pos = room.Vents[0].FloorPosition;
-                zombie.transform.SetPositionAndRotation(pos, Quaternion.LookRotation(-room.Vents[0].Facing));
+                zombie.transform.SetPositionAndRotation(pos, Quaternion.LookRotation(room.Vents[0].Facing));
+                zombie.GetComponent<UnityEngine.AI.NavMeshAgent>().enabled = false; // no NavMesh in the menu
             }
 
             var camGo = new GameObject("MenuCamera") { tag = "MainCamera" };
@@ -160,7 +161,7 @@ namespace Vent.Editor
             cam.farClipPlane = 60f;
             camGo.AddComponent<AudioListener>();
             var orbit = camGo.AddComponent<MenuCameraOrbit>();
-            orbit.Configure(Vector3.up * 1.2f, 3.2f, 1.7f);
+            orbit.Configure(Vector3.up * 1.2f, 3.2f, 0.5f); // height is relative to the pivot
 
             Save(scene, Paths.MainMenuScene);
         }
@@ -175,6 +176,7 @@ namespace Vent.Editor
             BuildingGenerator.Result building = BuildingGenerator.Generate(a, new BuildingLayout());
 
             var systems = new GameObject("Systems");
+            systems.transform.position = building.PlayerSpawn; // pooled instances are parked here, on the NavMesh
             var pools = systems.AddComponent<PoolRegistry>();
             SetPrewarm(pools, (a.ZombiePrefab, 12), (a.TracerPrefab, 24), (a.MuzzleFlashPrefab, 6), (a.ImpactPrefab, 24), (a.BloodImpactPrefab, 24));
 

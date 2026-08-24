@@ -90,6 +90,7 @@ namespace Vent.Editor
                     light.intensity = 2.6f;
                     light.color = new Color(1f, 0.93f, 0.8f);
                     light.shadows = LightShadows.None;
+                    lightGo.layer = Layers.PlayerIndex; // see PrefabFactory: lights live on a layer both cameras cull in
                 }
             }
 
@@ -244,9 +245,10 @@ namespace Vent.Editor
             }
 
             float side = (length - doorWidth) / 2f;
-            float sideOffset = doorWidth / 2f + side / 2f;
-            Block(wall, "Left", center - along * sideOffset + Vector3.up * (height / 2f), Size(side + thickness / 2f, height), a.Wall);
-            Block(wall, "Right", center + along * sideOffset + Vector3.up * (height / 2f), Size(side + thickness / 2f, height), a.Wall);
+            float segment = side + thickness / 2f;              // extends into the corner like solid walls do
+            float sideOffset = doorWidth / 2f + segment / 2f;   // inner edge lands exactly on the door opening
+            Block(wall, "Left", center - along * sideOffset + Vector3.up * (height / 2f), Size(segment, height), a.Wall);
+            Block(wall, "Right", center + along * sideOffset + Vector3.up * (height / 2f), Size(segment, height), a.Wall);
             float lintel = height - doorHeight;
             Block(wall, "Lintel", center + Vector3.up * (doorHeight + lintel / 2f), Size(doorWidth + 0.02f, lintel), a.Wall);
 

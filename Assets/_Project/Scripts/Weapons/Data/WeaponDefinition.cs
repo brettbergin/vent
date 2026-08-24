@@ -34,7 +34,6 @@ namespace Vent.Weapons.Data
         [SerializeField, Min(0f)] private float damage = 20f;
         [SerializeField, Min(1f)] private float roundsPerMinute = 600f;
         [SerializeField, Min(1f)] private float range = 80f;
-        [SerializeField, Min(1f)] private float headshotMultiplier = 2f;
 
         [Header("Ammo")]
         [SerializeField, Min(1)] private int magazineSize = 30;
@@ -78,7 +77,6 @@ namespace Vent.Weapons.Data
         public float Damage => damage;
         public float RoundsPerMinute => roundsPerMinute;
         public float Range => range;
-        public float HeadshotMultiplier => headshotMultiplier;
         public int MagazineSize => magazineSize;
         public int StartingReserve => startingReserve;
         public int MaxReserve => maxReserve;

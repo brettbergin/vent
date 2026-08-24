@@ -28,6 +28,7 @@ namespace Vent.Editor
 
                 Debug.Log("[Vent] Rebuild: scenes");
                 SceneBuilder.BuildAll(assets);
+                ProjectBootstrap.ConfigureBuildScenes(); // scenes exist now: refresh the list with real GUIDs
 
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
