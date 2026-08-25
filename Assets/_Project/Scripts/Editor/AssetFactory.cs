@@ -153,6 +153,11 @@ namespace Vent.Editor
             a.LedGreen = Lit("M_LedGreen", new Color(0.2f, 0.9f, 0.3f), smoothness: 0.5f, emission: new Color(0.2f, 1f, 0.3f) * 2.5f);
             a.LedAmber = Lit("M_LedAmber", new Color(0.9f, 0.6f, 0.1f), smoothness: 0.5f, emission: new Color(1f, 0.6f, 0.1f) * 2.5f);
             // Windows & exterior
+            // Grime under vents and on ceiling tiles: dark, translucent, matte.
+            a.Stain = LitTransparent("M_Stain", new Color(0.10f, 0.08f, 0.06f, 0.32f), smoothness: 0.02f);
+            a.PosterA = Lit("M_PosterA", new Color(0.85f, 0.25f, 0.20f), smoothness: 0.2f);
+            a.PosterB = Lit("M_PosterB", new Color(0.20f, 0.45f, 0.75f), smoothness: 0.2f);
+            a.PosterC = Lit("M_PosterC", new Color(0.90f, 0.75f, 0.25f), smoothness: 0.2f);
             a.WindowGlass = LitTransparent("M_WindowGlass", new Color(0.6f, 0.75f, 0.85f, 0.22f), smoothness: 0.97f);
             a.Asphalt = Lit("M_Asphalt", new Color(0.16f, 0.16f, 0.18f), smoothness: 0.15f, tex: asphalt);
             a.DistantBuilding = Lit("M_DistantBuilding", new Color(0.10f, 0.10f, 0.13f), smoothness: 0.2f);

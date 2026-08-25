@@ -53,7 +53,7 @@ namespace Vent.Editor
 
         // Materials
         public Material Floor, Wall, Ceiling, Trim, Prop, PropAlt, VentMetal, LightPanel, ZombieSkin, ZombieHead, ZombieClothes, ZombieGore, ZombieEye, HealthBarTrack, HealthBarFill, GunMetal, GunAccent, GunPolymer, GunSteel, Brass, Tracer, Flash, Spark, Blood, Concrete,
-            Wood, MetalGrey, MetalDark, Fabric, FabricLight, Plastic, Screen, Paper, Glass, Plant, Terracotta, VendingRed, BookA, BookB, BookC, LedGreen, LedAmber, WindowGlass, Asphalt, DistantBuilding, Skybox, PerkOrb;
+            Wood, MetalGrey, MetalDark, Fabric, FabricLight, Plastic, Screen, Paper, Glass, Plant, Terracotta, VendingRed, BookA, BookB, BookC, LedGreen, LedAmber, WindowGlass, Asphalt, DistantBuilding, Skybox, PerkOrb, Stain, PosterA, PosterB, PosterC;
 
         // Prefabs
         public GameObject MuzzleFlashPrefab, TracerPrefab, ImpactPrefab, BloodImpactPrefab;

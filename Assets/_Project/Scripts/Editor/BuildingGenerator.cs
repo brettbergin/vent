@@ -70,6 +70,7 @@ namespace Vent.Editor
             Transform lights = Child(result.Root.transform, "Lights");
             Transform vents = Child(result.Root.transform, "Vents");
             Transform props = Child(result.Root.transform, "Props");
+            Transform decals = Child(result.Root.transform, "Decals");
 
             int cols = layout.Columns, rows = layout.Rows;
             float cell = layout.CellSize, t = layout.WallThickness, h = layout.Height;
@@ -118,6 +119,8 @@ namespace Vent.Editor
                             lightGo.layer = Layers.PlayerIndex; // see PrefabFactory: lights live on a layer both cameras cull in
                         }
                     }
+
+                    DressCeiling(room, a, rng, center, cell, t, h, panels, pitch);
                 }
             }
 
@@ -212,6 +215,7 @@ namespace Vent.Editor
                             continue; // this wall is all window; the other sides will do
                         }
 
+                        VentGrime(decals, a, rng, pos, normal, layout.VentHeight);
                         var ventGo = (GameObject)PrefabUtility.InstantiatePrefab(a.VentPrefab, vents);
                         ventGo.name = $"Vent_{c}_{r}_{side}";
                         ventGo.transform.SetPositionAndRotation(pos, Quaternion.LookRotation(normal));
@@ -260,6 +264,11 @@ namespace Vent.Editor
                 GameObjectUtility.SetStaticEditorFlags(child.gameObject, StaticFlags);
             }
 
+            foreach (Transform child in decals.GetComponentsInChildren<Transform>())
+            {
+                GameObjectUtility.SetStaticEditorFlags(child.gameObject, StaticFlags & ~StaticEditorFlags.ContributeGI);
+            }
+
             if (layout.BakeNavMesh)
             {
                 var surface = result.Root.AddComponent<NavMeshSurface>();
@@ -297,6 +306,7 @@ namespace Vent.Editor
             float full = length + thickness;
 
             Block(wall, "Below", center + Vector3.up * (sill / 2f), Size(full, sill), a.Wall);
+            WallTrim(wall, a, center, alongZ, full, thickness, height, inward);
             Block(wall, "Above", center + Vector3.up * (top + (height - top) / 2f), Size(full, height - top), a.Wall);
 
             // Windows evenly spaced; piers fill the gaps (including the corner overlap at both ends).
@@ -537,6 +547,7 @@ namespace Vent.Editor
                 switch (type)
                 {
                     case RoomType.Office:
+                        Litter();
                         int desks = Scaled(2) + rng.Next(2);
                         for (int i = 0; i < desks; i++)
                         {
@@ -589,9 +600,11 @@ namespace Vent.Editor
                         Wall(PropLibrary.Kind.WaterCooler);
                         for (int i = 0; i < Scaled(1); i++) if (rng.NextDouble() < 0.7) Free(PropLibrary.Kind.PottedPlant, Rand(rng, 0f, 360f));
                         if (area > 1.5f) Wall(PropLibrary.Kind.Bookshelf);
+                        Litter();
                         break;
 
                     case RoomType.BreakRoom:
+                        Litter();
                         Wall(PropLibrary.Kind.VendingMachine);
                         Wall(PropLibrary.Kind.VendingMachine);
                         Wall(PropLibrary.Kind.WaterCooler);
@@ -617,6 +630,7 @@ namespace Vent.Editor
                         break;
 
                     case RoomType.Lobby:
+                        Litter();
                         Wall(PropLibrary.Kind.ReceptionCounter);
                         for (int i = 0; i < Scaled(1); i++) Wall(PropLibrary.Kind.Couch);
                         if (rng.NextDouble() < 0.7) Wall(PropLibrary.Kind.Couch);
@@ -627,6 +641,7 @@ namespace Vent.Editor
                         break;
 
                     case RoomType.Storage:
+                        Litter(posters: 0);
                         int units = Scaled(3) + rng.Next(3);
                         for (int i = 0; i < units; i++) Wall(PropLibrary.Kind.Shelving);
                         for (int i = 0; i < Scaled(1); i++) if (rng.NextDouble() < 0.7) Free(PropLibrary.Kind.Shelving, rng.Next(2) * 90f);
@@ -655,6 +670,33 @@ namespace Vent.Editor
 
                         Wall(PropLibrary.Kind.FilingCabinet);
                         break;
+                }
+            }
+
+            /// <summary>Posters on the walls and paper on the floor: the wear every room gets regardless of purpose.</summary>
+            private void Litter(int posters = -1)
+            {
+                int posterCount = posters >= 0 ? posters : Scaled(1) + rng.Next(2);
+                for (int i = 0; i < posterCount; i++)
+                {
+                    Wall(PropLibrary.Kind.Poster);
+                }
+
+                int piles = rng.NextDouble() < 0.75 ? Scaled(1) : 0;
+                for (int i = 0; i < piles; i++)
+                {
+                    Vector2 fp = PropLibrary.Footprint(PropLibrary.Kind.PaperScatter);
+                    for (int attempt = 0; attempt < 8; attempt++)
+                    {
+                        float half = cell / 2f - 1.2f;
+                        Vector3 pos = center + new Vector3(Rand(rng, -half, half), 0f, Rand(rng, -half, half));
+                        if (Fits(pos, fp, ignoreProps: true))
+                        {
+                            GameObject go = PropLibrary.Build(PropLibrary.Kind.PaperScatter, a, rng, parent);
+                            go.transform.position = pos; // not recorded: litter never blocks furniture
+                            break;
+                        }
+                    }
                 }
             }
 
@@ -756,6 +798,7 @@ namespace Vent.Editor
             if (!door)
             {
                 Block(wall, "Solid", center + Vector3.up * (height / 2f), Size(length + thickness, height), a.Wall);
+                WallTrim(wall, a, center, alongZ, length + thickness, thickness, height);
                 return;
             }
 
@@ -764,6 +807,8 @@ namespace Vent.Editor
             float sideOffset = doorWidth / 2f + segment / 2f;   // inner edge lands exactly on the door opening
             Block(wall, "Left", center - along * sideOffset + Vector3.up * (height / 2f), Size(segment, height), a.Wall);
             Block(wall, "Right", center + along * sideOffset + Vector3.up * (height / 2f), Size(segment, height), a.Wall);
+            WallTrim(wall, a, center - along * sideOffset, alongZ, segment, thickness, height);
+            WallTrim(wall, a, center + along * sideOffset, alongZ, segment, thickness, height);
             float lintel = height - doorHeight;
             Block(wall, "Lintel", center + Vector3.up * (doorHeight + lintel / 2f), Size(doorWidth + 0.02f, lintel), a.Wall);
 
@@ -771,6 +816,87 @@ namespace Vent.Editor
             Vector3 frameSize = alongZ ? new Vector3(thickness + 0.04f, doorHeight, 0.08f) : new Vector3(0.08f, doorHeight, thickness + 0.04f);
             Block(wall, "FrameL", center - along * (doorWidth / 2f) + Vector3.up * (doorHeight / 2f), frameSize, a.Trim, collider: false);
             Block(wall, "FrameR", center + along * (doorWidth / 2f) + Vector3.up * (doorHeight / 2f), frameSize, a.Trim, collider: false);
+        }
+
+        /// <summary>Skirting board at the floor and a cornice at the ceiling on both faces of a wall piece (or one, if <paramref name="onlyFace"/> is given).</summary>
+        private static void WallTrim(Transform wall, GameAssets a, Vector3 center, bool alongZ, float length, float thickness, float height, Vector3? onlyFace = null)
+        {
+            const float skirtH = 0.12f, skirtD = 0.018f, corniceH = 0.07f, corniceD = 0.03f;
+            Vector3 normal = alongZ ? Vector3.right : Vector3.forward;
+            foreach (int side in new[] { -1, 1 })
+            {
+                Vector3 face = normal * side;
+                if (onlyFace.HasValue && Vector3.Dot(face, onlyFace.Value) < 0.5f)
+                {
+                    continue;
+                }
+
+                Vector3 skirtSize = alongZ ? new Vector3(skirtD, skirtH, length) : new Vector3(length, skirtH, skirtD);
+                Vector3 corniceSize = alongZ ? new Vector3(corniceD, corniceH, length) : new Vector3(length, corniceH, corniceD);
+                Block(wall, side < 0 ? "SkirtingA" : "SkirtingB", center + face * (thickness / 2f + skirtD / 2f) + Vector3.up * (skirtH / 2f), skirtSize, a.Trim, collider: false);
+                Block(wall, side < 0 ? "CorniceA" : "CorniceB", center + face * (thickness / 2f + corniceD / 2f) + Vector3.up * (height - corniceH / 2f), corniceSize, a.Wall, collider: false);
+            }
+        }
+
+        /// <summary>
+        /// The things a real ceiling has that a box does not: a metal frame recessing each light panel, a
+        /// cable tray hugging one wall, a duct run across the room, and the odd water stain on the tiles.
+        /// </summary>
+        private static void DressCeiling(Transform room, GameAssets a, System.Random rng, Vector3 center, float cell, float wallThickness, float h, int panels, float pitch)
+        {
+            for (int pz = 0; pz < panels; pz++)
+            {
+                for (int px = 0; px < panels; px++)
+                {
+                    Vector3 at = center + new Vector3((px - (panels - 1) / 2f) * pitch, 0f, (pz - (panels - 1) / 2f) * pitch);
+                    Block(room, $"PanelFrame_{px}_{pz}", at + Vector3.up * (h - 0.015f), new Vector3(1.72f, 0.03f, 1.72f), a.MetalGrey, collider: false);
+                }
+            }
+
+            // Cable tray along one wall, 60 cm in from it, with a conduit riding beside it.
+            bool alongX = rng.NextDouble() < 0.5;
+            float side = rng.NextDouble() < 0.5 ? -1f : 1f;
+            float inset = cell / 2f - wallThickness - 0.6f;
+            Vector3 trayCenter = center + (alongX ? Vector3.forward : Vector3.right) * (side * inset) + Vector3.up * (h - 0.14f);
+            Vector3 traySize = alongX ? new Vector3(cell - 1.2f, 0.06f, 0.22f) : new Vector3(0.22f, 0.06f, cell - 1.2f);
+            Block(room, "CableTray", trayCenter, traySize, a.MetalDark, collider: false);
+            Vector3 conduitOffset = (alongX ? Vector3.forward : Vector3.right) * (-side * 0.22f);
+            Vector3 conduitSize = alongX ? new Vector3(cell - 1.2f, 0.05f, 0.05f) : new Vector3(0.05f, 0.05f, cell - 1.2f);
+            Block(room, "Conduit", trayCenter + conduitOffset + Vector3.up * 0.02f, conduitSize, a.MetalGrey, collider: false);
+
+            // A duct across the room, just under the ceiling.
+            if (rng.NextDouble() < 0.7)
+            {
+                float where = Rand(rng, -cell * 0.3f, cell * 0.3f);
+                Vector3 ductCenter = center + (alongX ? Vector3.right : Vector3.forward) * where + Vector3.up * (h - 0.25f);
+                Vector3 ductSize = alongX ? new Vector3(0.45f, 0.35f, cell - 0.4f) : new Vector3(cell - 0.4f, 0.35f, 0.45f);
+                Block(room, "Duct", ductCenter, ductSize, a.VentMetal, collider: false);
+            }
+
+            // Water stains on the tiles.
+            int stains = rng.NextDouble() < 0.6 ? 1 + rng.Next(2) : 0;
+            for (int i = 0; i < stains; i++)
+            {
+                Vector3 at = center + new Vector3(Rand(rng, -cell * 0.4f, cell * 0.4f), h - 0.004f, Rand(rng, -cell * 0.4f, cell * 0.4f));
+                float size = Rand(rng, 0.8f, 1.8f);
+                Block(room, $"CeilingStain{i}", at, new Vector3(size, 0.004f, size * Rand(rng, 0.6f, 1.2f)), a.Stain, collider: false);
+            }
+        }
+
+        /// <summary>Grime under a vent grate: a smear where the air has been blowing dust for years, and a drip streak down the wall.</summary>
+        private static void VentGrime(Transform parent, GameAssets a, System.Random rng, Vector3 grate, Vector3 normal, float ventHeight)
+        {
+            Vector3 along = Vector3.Cross(Vector3.up, normal);
+            Vector3 face = grate + normal * 0.012f; // just proud of the wall
+            Vector3 SizeOf(float w, float hgt) => new Vector3(Mathf.Abs(along.x) * w + Mathf.Abs(normal.x) * 0.006f, hgt, Mathf.Abs(along.z) * w + Mathf.Abs(normal.z) * 0.006f);
+            float smearH = Rand(rng, 0.8f, 1.3f);
+            Block(parent, "VentSmear", new Vector3(face.x, ventHeight - 0.3f - smearH / 2f, face.z), SizeOf(Rand(rng, 0.9f, 1.3f), smearH), a.Stain, collider: false);
+            if (rng.NextDouble() < 0.7)
+            {
+                float dripH = Rand(rng, 1.2f, ventHeight - 0.3f);
+                Vector3 dripAt = face + along * Rand(rng, -0.35f, 0.35f);
+                Block(parent, "VentDrip", new Vector3(dripAt.x, ventHeight - 0.35f - dripH / 2f, dripAt.z), SizeOf(Rand(rng, 0.06f, 0.14f), dripH), a.Stain, collider: false);
+            }
         }
 
         private static GameObject Block(Transform parent, string name, Vector3 worldCenter, Vector3 size, Material material, bool collider = true)

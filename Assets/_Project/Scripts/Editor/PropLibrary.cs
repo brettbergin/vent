@@ -15,6 +15,7 @@ namespace Vent.Editor
         {
             Desk, OfficeChair, FilingCabinet, Bookshelf, WaterCooler, PottedPlant, ConferenceTable, VendingMachine,
             Couch, ReceptionCounter, ServerRack, Shelving, TrashBin, Whiteboard, Copier, CubicleWall,
+            Poster, PaperScatter,
         }
 
         /// <summary>Floor footprint (x = width across the front, y = depth), metres.</summary>
@@ -34,6 +35,8 @@ namespace Vent.Editor
             Kind.Shelving => new Vector2(1.8f, 0.6f),
             Kind.TrashBin => new Vector2(0.4f, 0.4f),
             Kind.Whiteboard => new Vector2(1.8f, 0.1f),
+            Kind.Poster => new Vector2(0.7f, 0.05f),
+            Kind.PaperScatter => new Vector2(1.2f, 1.2f),
             Kind.Copier => new Vector2(1.0f, 0.7f),
             Kind.CubicleWall => new Vector2(1.8f, 0.1f),
             _ => Vector2.one,
@@ -66,6 +69,8 @@ namespace Vent.Editor
                 case Kind.Whiteboard: Whiteboard(t, a); break;
                 case Kind.Copier: Copier(t, a); break;
                 case Kind.CubicleWall: CubicleWall(t, a); break;
+                case Kind.Poster: Poster(t, a, rng); break;
+                case Kind.PaperScatter: PaperScatter(t, a, rng); break;
             }
 
             Layers.SetRecursively(root, Layers.EnvironmentIndex);
@@ -95,6 +100,19 @@ namespace Vent.Editor
             if (rng.NextDouble() < 0.6)
             {
                 Box(t, "Paper", new Vector3(0.25f, 0.775f, -0.05f), new Vector3(0.22f, 0.03f, 0.3f), a.Paper, collider: false);
+                Box(t, "Paper2", new Vector3(0.28f, 0.79f, -0.02f), new Vector3(0.21f, 0.005f, 0.29f), a.Paper, collider: false).transform.localRotation = Quaternion.Euler(0f, 12f, 0f);
+            }
+
+            if (rng.NextDouble() < 0.5)
+            {
+                // A mug, sometimes with a pen beside it.
+                GameObject mug = PrefabFactory.Primitive(PrimitiveType.Cylinder, "Mug", t, new Vector3(0.55f, 0.805f, -0.15f), new Vector3(0.08f, 0.045f, 0.08f), rng.NextDouble() < 0.5 ? a.PosterB : a.Paper, false);
+                PrefabFactory.Primitive(PrimitiveType.Cylinder, "MugHandle", mug.transform, new Vector3(0.6f, 0f, 0f), new Vector3(0.35f, 0.6f, 0.15f), mug.GetComponent<Renderer>().sharedMaterial, false);
+            }
+
+            if (rng.NextDouble() < 0.6)
+            {
+                Box(t, "Pen", new Vector3(0.05f, 0.78f, -0.22f), new Vector3(0.14f, 0.008f, 0.008f), a.MetalDark, collider: false).transform.localRotation = Quaternion.Euler(0f, Rand(rng, -40f, 40f), 0f);
             }
             else
             {
@@ -297,6 +315,30 @@ namespace Vent.Editor
             Box(t, "TrayL", new Vector3(-0.6f, 0.7f, 0f), new Vector3(0.22f, 0.02f, 0.4f), a.Plastic, collider: false);
             Box(t, "Paper", new Vector3(-0.6f, 0.72f, 0f), new Vector3(0.2f, 0.02f, 0.3f), a.Paper, collider: false);
         }
+
+        private static void Poster(Transform t, GameAssets a, System.Random rng)
+        {
+            // Wall-hung sheet at eye height with a coloured block and a title bar: reads as a poster from across the room.
+            Material accent = rng.Next(3) switch { 0 => a.PosterA, 1 => a.PosterB, _ => a.PosterC };
+            float h = Rand(rng, 1.35f, 1.65f);
+            Box(t, "Sheet", new Vector3(0f, h, 0.012f), new Vector3(0.6f, 0.85f, 0.006f), a.Paper, collider: false);
+            Box(t, "Art", new Vector3(0f, h + 0.1f, 0.016f), new Vector3(0.5f, 0.5f, 0.004f), accent, collider: false);
+            Box(t, "Title", new Vector3(0f, h - 0.28f, 0.016f), new Vector3(0.42f, 0.05f, 0.004f), a.MetalDark, collider: false);
+            Box(t, "Line", new Vector3(-0.05f, h - 0.36f, 0.016f), new Vector3(0.3f, 0.02f, 0.004f), a.MetalDark, collider: false);
+        }
+
+        private static void PaperScatter(Transform t, GameAssets a, System.Random rng)
+        {
+            // Sheets that slid off a desk. No colliders: it is litter, not cover.
+            int sheets = 3 + rng.Next(4);
+            for (int i = 0; i < sheets; i++)
+            {
+                var pos = new Vector3(Rand(rng, -0.5f, 0.5f), 0.003f + i * 0.002f, Rand(rng, -0.5f, 0.5f));
+                Box(t, $"Sheet{i}", pos, new Vector3(0.21f, 0.004f, 0.297f), a.Paper, collider: false).transform.localRotation = Quaternion.Euler(0f, Rand(rng, 0f, 360f), 0f);
+            }
+        }
+
+        private static float Rand(System.Random rng, float min, float max) => (float)(min + rng.NextDouble() * (max - min));
 
         private static void CubicleWall(Transform t, GameAssets a)
         {

@@ -328,11 +328,27 @@ namespace Vent.Editor
             bloom.intensity.Override(0.55f);
             bloom.scatter.Override(0.65f);
 
+            // Grading with intent: a cold fluorescent office, warm dusk leaking through the glass. Shadows
+            // pull blue, highlights pull amber, and the whole frame sits a touch under-saturated and
+            // contrasty so the perk colours and blood read against it.
             ColorAdjustments color = Add<ColorAdjustments>();
-            color.postExposure.Override(0.8f);
-            color.contrast.Override(5f);
-            color.saturation.Override(-15f);
-            color.colorFilter.Override(new Color(0.92f, 0.96f, 1f));
+            color.postExposure.Override(0.7f); // baked bounce brightened the rooms; pull back a little
+            color.contrast.Override(12f);
+            color.saturation.Override(-10f);
+            color.colorFilter.Override(new Color(0.95f, 0.97f, 1f));
+
+            WhiteBalance balance = Add<WhiteBalance>();
+            balance.temperature.Override(-3f);
+            balance.tint.Override(1f);
+
+            SplitToning toning = Add<SplitToning>();
+            toning.shadows.Override(new Color(0.66f, 0.71f, 0.86f));
+            toning.highlights.Override(new Color(1f, 0.92f, 0.80f));
+            toning.balance.Override(-5f);
+
+            LiftGammaGain lgg = Add<LiftGammaGain>();
+            lgg.lift.Override(new Vector4(1f, 1f, 1f, -0.02f)); // crush the blacks slightly
+            lgg.gain.Override(new Vector4(1f, 1f, 1f, 0.02f));
 
             Vignette vignette = Add<Vignette>();
             vignette.intensity.Override(0.18f);
