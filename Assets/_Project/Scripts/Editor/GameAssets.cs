@@ -26,6 +26,7 @@ namespace Vent.Editor
         public WeaponHudEventChannel WeaponHud;
         public WeaponLevelUpEventChannel WeaponLevelUp;
         public BoolEventChannel Hit;
+        public NoiseEventChannel Noise;
         public GameStateEventChannel GameState;
         public RunSummaryEventChannel RunSummary;
         public IntEventChannel BestLevel;
@@ -48,10 +49,12 @@ namespace Vent.Editor
         public PanelSettings PanelSettings;
 
         // Materials
-        public Material Floor, Wall, Ceiling, Trim, Prop, PropAlt, VentMetal, LightPanel, ZombieSkin, ZombieHead, GunMetal, GunAccent, Tracer, Flash, Spark, Blood, Concrete;
+        public Material Floor, Wall, Ceiling, Trim, Prop, PropAlt, VentMetal, LightPanel, ZombieSkin, ZombieHead, ZombieClothes, ZombieGore, ZombieEye, HealthBarTrack, HealthBarFill, GunMetal, GunAccent, GunPolymer, GunSteel, Brass, Tracer, Flash, Spark, Blood, Concrete,
+            Wood, MetalGrey, MetalDark, Fabric, FabricLight, Plastic, Screen, Paper, Glass, Plant, Terracotta, VendingRed, BookA, BookB, BookC, LedGreen, LedAmber, WindowGlass, Asphalt, DistantBuilding, Skybox;
 
         // Prefabs
         public GameObject MuzzleFlashPrefab, TracerPrefab, ImpactPrefab, BloodImpactPrefab;
+        public GameObject ShellCasingPrefab;
         public GameObject SmgViewModel, PistolViewModel;
         public GameObject ZombiePrefab, VentPrefab, PlayerPrefab;
     }

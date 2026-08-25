@@ -17,6 +17,7 @@ namespace Vent.Editor
         public const string BuildingScene = Scenes + "/Building.unity";
         public const string BuildingNavMesh = Scenes + "/Building_NavMesh.asset";
         public const string LightingSettings = Scenes + "/VentLighting.lighting";
+        public const string PostProcessProfile = Scenes + "/VentPostFx.asset";
 
         public const string Theme = UI + "/VentTheme.tss";
         public const string PanelSettings = UI + "/VentPanelSettings.asset";

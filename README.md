@@ -12,15 +12,14 @@ checkout regenerates the whole project with one command.
 ## Quick start
 
 ```bash
-# 1. Regenerate all assets/prefabs/scenes (also runs from the Unity menu: Vent ▸ Rebuild Everything)
-./tools/regen.sh
-
-# 2. Run the test suites (EditMode: pure logic; PlayMode: end-to-end in the generated scene)
-./tools/test.sh
-
-# 3. Build a macOS player into Builds/Vent.app
-./tools/build.sh
+make regen    # 1. Regenerate all assets/prefabs/scenes (Unity menu: Vent ▸ Rebuild Everything)
+make test     # 2. Run the test suites (EditMode: pure logic; PlayMode: end-to-end in the generated scene)
+make build    # 3. Build a macOS player into Builds/Vent.app (make build-windows for Windows x64)
+make run      #    ...and launch it
+make help     #    everything else (windowed test run, open in the editor, logs, clean)
 ```
+
+The `make` targets wrap the scripts in `tools/`; call those directly if you prefer.
 
 Or open the project in the Editor, run **Vent ▸ Rebuild Everything**, open
 `Assets/_Project/Scenes/Boot.unity` and press Play.
@@ -50,6 +49,11 @@ Controls: WASD move · Shift sprint · Space jump · Mouse look · LMB fire · R
 * The **environment never changes** (one generated building), the **zombie never changes** (one
   definition), the **guns never change** (SMG + Pistol). Only `DifficultyProfile` curves and
   `WeaponLevelCurve` curves move the numbers.
+* **Aggression is one of those numbers.** At level 1 zombies are merely annoyed: they shamble near
+  their vent until they see you up close, hear a shot nearby, or get hit. Every level they notice
+  from farther away, sense you through walls from farther away, re-path more often and strike
+  faster, until around level 13 they are enraged and always know where you are.
+  (`DifficultyProfile.Aggression` → `ZombieStats.From` → `Zombie` states `Wandering`/`Chasing`.)
 * Zombie damage is `baseDamage × DamageMultiplier(level)`; zombies already alive are re-scaled when
   the level changes, so damage is always relative to the level being played.
 
@@ -79,9 +83,13 @@ Patterns you will see, and why:
 | **Tiny service locator** | `Core/Services/GameServices` | For true scene singletons only (player target, pools, audio, director). Interfaces (`IPlayerTarget`) keep Enemies independent of Player. |
 | **Input reader asset** | `Player/Input/InputReader` | The only class that touches the Input System; exposes polled values and C# events; switches action maps. |
 | **Explicit state machines** | `Weapon`, `Zombie`, `GameManager` | Enum + switch. Small enough to read top to bottom. |
-| **Procedural presentation** | `WeaponViewModel`, `ZombieAnimator`, `CameraMotion`, `ProceduralSoundBank` | No clips, no imports: sway/bob/recoil/flinch and every sound are computed. |
+| **Awaitable transitions** | `GameManager` | Scene loads and the death delay are Unity 6 `Awaitable`s under a `CancellationTokenSource` linked to `destroyCancellationToken`; a new transition cancels the old one. No coroutines. |
+| **Procedural presentation** | `WeaponViewModel`, `ZombieAnimator`, `CameraMotion`, `ProceduralSoundBank` | No clips, no imports: sway/bob/recoil/flinch and every sound are computed. The view-model also animates gun parts by name — magazine drops and reseats on reload, slide/bolt cycles per shot and locks back on empty — and ejects pooled brass. |
+| **Gun handling in numbers** | `Weapons/Runtime/Ballistics.cs`, `WeaponDefinition` "handling" | Chambered round (+1 on a tactical reload), slower empty reload that ends with a rack, recoil that climbs over sustained fire, damage falloff by distance, per-weapon flash size. Pure arithmetic is unit tested. |
 | **Camera stacking** | `PrefabFactory.CreatePlayer` | URP overlay camera renders the gun so it never clips into walls. |
-| **UI Toolkit** | `UI/*.uxml`, `UI/Screens` | Screens are documents + a controller bound to channels; visibility follows `GameState`. |
+| **Generated post-processing** | `SceneBuilder.BuildPostProcessProfile` | One `VolumeProfile` (ACES, bloom off the emissive panels, grading, vignette, grain) built from code; a global `Volume` in each lit scene. |
+| **Forward+ lighting, no GPU Resident Drawer** | `Assets/Settings/PC_RPAsset.asset`, `BuildingGenerator` | Room lights cast hard shadows within a 20 m shadow distance. The GPU Resident Drawer is deliberately **off**: with it on, the macOS player drew only the clear colour (its instancing shader variants were stripped from the build; the editor keeps every variant, so it looked fine there). `GeneratedSceneTests` pins this. Geometry stays static-batched. |
+| **UI Toolkit + runtime data binding** | `UI/*.uxml`, `UI/Screens`, `HudViewModel` | Screens are documents + a controller bound to channels; visibility follows `GameState`. The HUD binds declaratively (`<Bindings>` in `Hud.uxml`) to a plain `HudViewModel`; the controller only writes the model. |
 
 ### Reading order
 
@@ -97,11 +105,27 @@ Patterns you will see, and why:
 ## Tuning
 
 * Difficulty: `Assets/_Project/Data/DifficultyProfile.asset` (curves over level). Defaults in
-  `DifficultyProfile.ApplyDefaults()`.
+  `DifficultyProfile.ApplyDefaults()`. Includes the aggression curve and the grace periods: `runStartGrace` (seconds before
+  the first zombie) and `levelStartGrace` (seconds of breather after each level-up).
 * Guns: `Data/Weapon_SMG.asset`, `Data/Weapon_Pistol.asset`; level scaling in
   `Data/WeaponLevels_Standard.asset` (`WeaponLevelCurve.ApplyDefaults()`).
-* Zombie: `Data/Zombie.asset`.
+* Zombie: `Data/Zombie.asset` — base stats, melee timing, hit reactions (stagger threshold and
+  length, limb damage multiplier), and the "annoyed" ends of the aggression ranges (notice/hearing
+  radii, slower strikes, wander speed); the enraged ends are the base values.
+* Zombie body: `PrefabFactory.CreateZombie` builds a jointed rig (hips → spine → neck → head/jaw,
+  shoulder → elbow, hip → knee) with hitboxes per zone (head 2.5×, torso 1×, limbs 0.65×) and a
+  world-space health bar; `ZombieAnimator` drives the pivots (shuffle, reach, lunge, stagger,
+  topple-and-sink death) and randomises height, tint, stride and arm pose per spawn.
 * Building: `BuildingLayout` in `Editor/BuildingGenerator.cs` (grid size, room size, seed, door density).
+  Each room is given a purpose (`RoomType`: office, conference, break room, lobby at the spawn,
+  storage, server room) and furnished from `Editor/PropLibrary.cs` — desks, chairs, cabinets,
+  shelves, vending machines, racks and the rest, all primitives with colliders on the Environment
+  layer, so they are cover, they carve the NavMesh, and they never sit on a door or a vent landing.
+  **Vent ▸ Snapshot Rooms** photographs every room to `Logs/`.
+  Outer walls carry windows (glass panes keep the building sealed and are shootable). Rooms are lit
+  by their ceiling panel plus a warm dusk spot light outside each window — the only light that comes
+  "through" a window, so nothing leaks through walls — and a sun on its own rendering layer lights
+  only the exterior (ground, distant buildings, procedural dusk sky).
 
 Re-running **Vent ▸ Rebuild Everything** rewrites assets in place (GUIDs are preserved), so
 references never break. Edit the defaults in code, regenerate, commit.

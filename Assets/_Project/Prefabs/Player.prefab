@@ -180,6 +180,7 @@ MonoBehaviour:
   levelUpChannel: {fileID: 11400000, guid: 5cd7b40facade4c1ba085d46fa9611b7, type: 2}
   killChannel: {fileID: 11400000, guid: c6fb2fed1cafd466d9f9ebdaa9562848, type: 2}
   hitChannel: {fileID: 11400000, guid: bd58dd5796c874068b8c861054a9d929, type: 2}
+  noiseChannel: {fileID: 11400000, guid: adee1756cda4444c2b02b91cc8c443ce, type: 2}
 --- !u!114 &3829022172412690567
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -345,6 +346,8 @@ MonoBehaviour:
   bobSprintMultiplier: 1.4
   landDipAmount: 0.08
   landRecoverySharpness: 10
+  aimZoomDegrees: 12
+  aimZoomSharpness: 12
   shakeDecaySharpness: 8
   shakeFrequency: 28
 --- !u!114 &8845968915412165240

@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
+using Vent.Core.Data;
 using Vent.Core.Damage;
 using Vent.Core.Events;
 using Vent.Core.Pooling;
@@ -208,7 +209,159 @@ namespace Vent.Tests.PlayMode
 
             Assert.AreEqual(2, lastLevel);
             Assert.AreEqual(2, building.Director.Level);
-            Assert.AreEqual(weapon.Stats.MagazineSize, weapon.Magazine, "level-up refills the magazine");
+            Assert.AreEqual(weapon.Capacity, weapon.Magazine, "level-up refills the magazine, plus one chambered");
+        }
+
+        [UnityTest]
+        public IEnumerator RunStartsWithAGracePeriodBeforeTheFirstZombie()
+        {
+            var spawner = Object.FindFirstObjectByType<ZombieSpawner>();
+            building.BeginRun();
+            yield return null;
+
+            Assert.Greater(spawner.SecondsUntilNextSpawn, 1f, "the spawner should be holding at run start");
+            float until = Time.time + 1.5f;
+            while (Time.time < until)
+            {
+                Assert.AreEqual(0, spawner.AliveCount, "no zombie may appear during the run-start grace");
+                yield return null;
+            }
+
+            Assert.Greater(spawner.SecondsUntilNextSpawn, 0f, "still inside the grace period after 1.5 s");
+        }
+
+        [UnityTest]
+        public IEnumerator AnnoyedZombieWandersUntilItHearsAGunshot()
+        {
+            building.BeginRun();
+            var spawner = Object.FindFirstObjectByType<ZombieSpawner>();
+            spawner.StopSpawning();
+
+            // The vent farthest from the player: well outside a level-1 zombie's notice radius.
+            AirVent vent = null;
+            float farthest = 0f;
+            foreach (AirVent v in Object.FindObjectsByType<AirVent>(FindObjectsSortMode.None))
+            {
+                float d = Vector3.Distance(v.FloorPosition, player.Position);
+                if (d > farthest) { farthest = d; vent = v; }
+            }
+
+            var zombieDef = Resources.FindObjectsOfTypeAll<ZombieDefinition>()[0];
+            var difficulty = Resources.FindObjectsOfTypeAll<DifficultyProfile>()[0];
+            ZombieStats annoyed = ZombieStats.From(zombieDef, difficulty.Evaluate(1));
+            Assert.Greater(farthest, annoyed.NoticeRadius, "sanity: the chosen vent is beyond notice range");
+
+            var zombie = GameServices.Get<PoolRegistry>().Spawn<Zombie>(zombieDef.Prefab, vent.GratePosition, Quaternion.identity);
+            zombie.Spawn(annoyed, vent);
+
+            float deadline = Time.time + 5f;
+            while (zombie.State == ZombieState.Emerging && Time.time < deadline)
+            {
+                yield return null;
+            }
+
+            Assert.AreEqual(ZombieState.Wandering, zombie.State, "a level-1 zombie that cannot see the player wanders");
+            Assert.IsFalse(zombie.IsAlerted);
+
+            // A shot right next to it is within any hearing radius.
+            Resources.FindObjectsOfTypeAll<NoiseEventChannel>()[0].Raise(new NoiseInfo(zombie.transform.position));
+            yield return null;
+
+            Assert.IsTrue(zombie.IsAlerted);
+            Assert.AreEqual(ZombieState.Chasing, zombie.State, "hearing gunfire turns a wanderer into a chaser");
+        }
+
+        [UnityTest]
+        public IEnumerator TacticalReloadKeepsOneInTheChamberAndEmptyReloadDoesNot()
+        {
+            building.BeginRun();
+            Object.FindFirstObjectByType<ZombieSpawner>().StopSpawning();
+            Weapon weapon = player.Inventory.Current;
+            float deadline = Time.time + 2f;
+            while (weapon.State != WeaponState.Ready && Time.time < deadline)
+            {
+                yield return null;
+            }
+
+            int magazine = weapon.Stats.MagazineSize;
+            Assert.AreEqual(magazine + 1, weapon.Magazine, "a fresh gun carries a full magazine plus one chambered");
+
+            // Fire one round, then a tactical reload: back to magazine + 1.
+            weapon.PullTrigger();
+            yield return null;
+            weapon.ReleaseTrigger();
+            Assert.Less(weapon.Magazine, magazine + 1);
+            Assert.IsTrue(weapon.TryReload());
+            deadline = Time.time + weapon.Stats.ReloadSeconds + 1f;
+            while (weapon.State == WeaponState.Reloading && Time.time < deadline)
+            {
+                yield return null;
+            }
+
+            Assert.AreEqual(magazine + 1, weapon.Magazine, "tactical reload keeps the chambered round");
+
+            // Empty reload: only a full magazine, and it takes longer.
+            Assert.Greater(weapon.Stats.EmptyReloadSeconds, weapon.Stats.ReloadSeconds);
+            weapon.RefillAmmo();
+            weapon.PullTrigger();
+            deadline = Time.time + 6f;
+            while (weapon.Magazine > 0 && Time.time < deadline)
+            {
+                yield return null;
+            }
+
+            weapon.ReleaseTrigger();
+            Assert.AreEqual(0, weapon.Magazine, "held trigger runs the SMG dry");
+            Assert.IsTrue(weapon.TryReload(), "R on an empty gun starts the (slower) empty reload");
+            deadline = Time.time + weapon.Stats.EmptyReloadSeconds + 1f;
+            while (weapon.State == WeaponState.Reloading && Time.time < deadline)
+            {
+                yield return null;
+            }
+
+            Assert.AreEqual(magazine, weapon.Magazine, "empty reload has nothing to chamber beyond the magazine");
+        }
+
+        [UnityTest]
+        public IEnumerator HeavyHitStaggersAndHealthBarTracksDamage()
+        {
+            building.BeginRun();
+            Object.FindFirstObjectByType<ZombieSpawner>().StopSpawning();
+            AirVent vent = Object.FindObjectsByType<AirVent>(FindObjectsSortMode.None)[0];
+            var zombieDef = Resources.FindObjectsOfTypeAll<ZombieDefinition>()[0];
+            var zombie = GameServices.Get<PoolRegistry>().Spawn<Zombie>(zombieDef.Prefab, vent.GratePosition, Quaternion.identity);
+            zombie.Spawn(new ZombieStats(100f, 5f, 3f, 25), vent);
+
+            float deadline = Time.time + 5f;
+            while (zombie.State == ZombieState.Emerging && Time.time < deadline)
+            {
+                yield return null;
+            }
+
+            Assert.AreEqual(ZombieState.Chasing, zombie.State);
+
+            // A light body hit only flinches; a heavy one staggers.
+            var weapon = new GameObject("FakeGun");
+            zombie.ApplyDamage(new DamageInfo(10f, DamageKind.Bullet, weapon, zombie.transform.position, Vector3.up, Vector3.forward));
+            Assert.AreEqual(ZombieState.Chasing, zombie.State, "10% is a flinch, not a stagger");
+            zombie.ApplyDamage(new DamageInfo(40f, DamageKind.Bullet, weapon, zombie.transform.position, Vector3.up, Vector3.forward));
+            Assert.AreEqual(ZombieState.Staggered, zombie.State, "40% in one hit staggers");
+            Assert.AreEqual(0.5f, zombie.HealthNormalized, 1e-4f);
+
+            yield return null;
+            yield return null;
+            Transform fill = zombie.GetComponentInChildren<ZombieHealthBar>().transform.Find("Fill");
+            Assert.IsNotNull(fill);
+            Assert.AreEqual(0.5f, fill.localScale.x / 0.58f, 0.02f, "fill width follows health");
+
+            deadline = Time.time + zombieDef.StaggerSeconds + 1f;
+            while (zombie.State == ZombieState.Staggered && Time.time < deadline)
+            {
+                yield return null;
+            }
+
+            Assert.AreEqual(ZombieState.Chasing, zombie.State, "stagger ends and the chase resumes");
+            Object.Destroy(weapon);
         }
     }
 }

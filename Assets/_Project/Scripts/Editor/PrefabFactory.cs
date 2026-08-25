@@ -40,11 +40,12 @@ namespace Vent.Editor
             a.TracerPrefab = CreateTracer(a);
             a.ImpactPrefab = CreateImpact("VFX_Impact", a.Spark, count: 14, speedMin: 3f, speedMax: 6f, size: 0.03f, gravity: 1.5f);
             a.BloodImpactPrefab = CreateImpact("VFX_BloodImpact", a.Blood, count: 22, speedMin: 2f, speedMax: 5f, size: 0.045f, gravity: 2.5f);
+            a.ShellCasingPrefab = CreateShellCasing(a);
 
             a.SmgViewModel = CreateSmgViewModel(a);
             a.PistolViewModel = CreatePistolViewModel(a);
-            a.Smg.SetPresentation(a.SmgViewModel, a.MuzzleFlashPrefab, a.TracerPrefab, a.ImpactPrefab, a.BloodImpactPrefab);
-            a.Pistol.SetPresentation(a.PistolViewModel, a.MuzzleFlashPrefab, a.TracerPrefab, a.ImpactPrefab, a.BloodImpactPrefab);
+            a.Smg.SetPresentation(a.SmgViewModel, a.MuzzleFlashPrefab, a.TracerPrefab, a.ImpactPrefab, a.BloodImpactPrefab, a.ShellCasingPrefab);
+            a.Pistol.SetPresentation(a.PistolViewModel, a.MuzzleFlashPrefab, a.TracerPrefab, a.ImpactPrefab, a.BloodImpactPrefab, a.ShellCasingPrefab);
             EditorUtility.SetDirty(a.Smg);
             EditorUtility.SetDirty(a.Pistol);
 
@@ -145,48 +146,148 @@ namespace Vent.Editor
 
         // ------------------------------------------------------------------ weapons
 
+        private static GameObject CreateShellCasing(GameAssets a)
+        {
+            var root = new GameObject("VFX_ShellCasing");
+            root.AddComponent<PooledObject>();
+            root.AddComponent<ShellCasing>();
+            GameObject body = Primitive(PrimitiveType.Cylinder, "Brass", root.transform, Vector3.zero, new Vector3(0.007f, 0.009f, 0.007f), a.Brass, collider: false);
+            body.transform.localRotation = Quaternion.Euler(90f, 0f, 0f); // cylinder axis along +Z (the gun's forward)
+            body.GetComponent<Renderer>().shadowCastingMode = ShadowCastingMode.Off;
+            return Save(root);
+        }
+
+        /// <summary>
+        /// Greybox SMG built from primitives: polymer lower with a pistol grip and foregrip, steel
+        /// upper with a shrouded barrel, iron sights, charging handle and ejection port, a canted
+        /// magazine and a tube stock. Parts the view-model animates are wired by name.
+        /// </summary>
         private static GameObject CreateSmgViewModel(GameAssets a)
         {
             var root = new GameObject("VM_SMG");
             var vm = root.AddComponent<WeaponViewModel>();
             Transform t = root.transform;
-            Primitive(PrimitiveType.Cube, "Receiver", t, new Vector3(0f, 0f, 0f), new Vector3(0.05f, 0.07f, 0.36f), a.GunMetal, false);
-            Primitive(PrimitiveType.Cube, "Barrel", t, new Vector3(0f, 0.015f, 0.26f), new Vector3(0.025f, 0.025f, 0.18f), a.GunMetal, false);
-            Primitive(PrimitiveType.Cube, "Magazine", t, new Vector3(0f, -0.1f, 0.03f), new Vector3(0.035f, 0.14f, 0.05f), a.GunMetal, false);
-            GameObject grip = Primitive(PrimitiveType.Cube, "Grip", t, new Vector3(0f, -0.08f, -0.1f), new Vector3(0.035f, 0.1f, 0.04f), a.GunAccent, false);
-            grip.transform.localRotation = Quaternion.Euler(15f, 0f, 0f);
-            Primitive(PrimitiveType.Cube, "Stock", t, new Vector3(0f, -0.01f, -0.24f), new Vector3(0.04f, 0.05f, 0.16f), a.GunAccent, false);
-            Primitive(PrimitiveType.Cube, "Sight", t, new Vector3(0f, 0.05f, 0.05f), new Vector3(0.015f, 0.03f, 0.05f), a.GunMetal, false);
+
+            // Upper receiver + rail
+            Primitive(PrimitiveType.Cube, "Upper", t, new Vector3(0f, 0.01f, 0.02f), new Vector3(0.05f, 0.05f, 0.34f), a.GunSteel, false);
+            Primitive(PrimitiveType.Cube, "Rail", t, new Vector3(0f, 0.04f, 0.04f), new Vector3(0.03f, 0.012f, 0.24f), a.GunMetal, false);
+            // Lower receiver, mag well, trigger group
+            Primitive(PrimitiveType.Cube, "Lower", t, new Vector3(0f, -0.03f, -0.02f), new Vector3(0.048f, 0.04f, 0.26f), a.GunPolymer, false);
+            Primitive(PrimitiveType.Cube, "MagWell", t, new Vector3(0f, -0.06f, 0.03f), new Vector3(0.042f, 0.03f, 0.06f), a.GunPolymer, false);
+            Primitive(PrimitiveType.Cube, "TriggerGuard", t, new Vector3(0f, -0.075f, -0.05f), new Vector3(0.012f, 0.004f, 0.06f), a.GunMetal, false);
+            Primitive(PrimitiveType.Cube, "Trigger", t, new Vector3(0f, -0.062f, -0.04f), new Vector3(0.006f, 0.02f, 0.006f), a.GunMetal, false);
+            GameObject grip = Primitive(PrimitiveType.Cube, "Grip", t, new Vector3(0f, -0.09f, -0.1f), new Vector3(0.034f, 0.1f, 0.036f), a.GunPolymer, false);
+            grip.transform.localRotation = Quaternion.Euler(18f, 0f, 0f);
+            GameObject foregrip = Primitive(PrimitiveType.Cube, "Foregrip", t, new Vector3(0f, -0.075f, 0.13f), new Vector3(0.026f, 0.06f, 0.026f), a.GunPolymer, false);
+            foregrip.transform.localRotation = Quaternion.Euler(-8f, 0f, 0f);
+            // Magazine (animated): canted forward, curved look approximated by two segments
+            var mag = new GameObject("Magazine");
+            mag.transform.SetParent(t, false);
+            mag.transform.localPosition = new Vector3(0f, -0.075f, 0.03f);
+            mag.transform.localRotation = Quaternion.Euler(-6f, 0f, 0f);
+            Primitive(PrimitiveType.Cube, "MagBody", mag.transform, new Vector3(0f, -0.06f, 0f), new Vector3(0.032f, 0.12f, 0.05f), a.GunMetal, false);
+            Primitive(PrimitiveType.Cube, "MagBase", mag.transform, new Vector3(0f, -0.125f, 0.004f), new Vector3(0.036f, 0.012f, 0.056f), a.GunPolymer, false);
+            // Barrel: shroud, barrel, muzzle brake
+            GameObject shroud = Primitive(PrimitiveType.Cylinder, "Shroud", t, new Vector3(0f, 0.012f, 0.24f), new Vector3(0.034f, 0.06f, 0.034f), a.GunMetal, false);
+            shroud.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            GameObject barrel = Primitive(PrimitiveType.Cylinder, "Barrel", t, new Vector3(0f, 0.012f, 0.35f), new Vector3(0.016f, 0.05f, 0.016f), a.GunSteel, false);
+            barrel.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            GameObject brake = Primitive(PrimitiveType.Cylinder, "MuzzleBrake", t, new Vector3(0f, 0.012f, 0.405f), new Vector3(0.024f, 0.015f, 0.024f), a.GunMetal, false);
+            brake.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            // Sights
+            Primitive(PrimitiveType.Cube, "FrontSightBase", t, new Vector3(0f, 0.045f, 0.19f), new Vector3(0.014f, 0.012f, 0.014f), a.GunMetal, false);
+            Primitive(PrimitiveType.Cube, "FrontSightPost", t, new Vector3(0f, 0.058f, 0.19f), new Vector3(0.003f, 0.016f, 0.003f), a.GunSteel, false);
+            Primitive(PrimitiveType.Cube, "RearSightL", t, new Vector3(-0.006f, 0.055f, -0.09f), new Vector3(0.006f, 0.014f, 0.01f), a.GunMetal, false);
+            Primitive(PrimitiveType.Cube, "RearSightR", t, new Vector3(0.006f, 0.055f, -0.09f), new Vector3(0.006f, 0.014f, 0.01f), a.GunMetal, false);
+            // Bolt (animated) sits in the ejection port on the right side; charging handle rides with it
+            var bolt = new GameObject("Bolt");
+            bolt.transform.SetParent(t, false);
+            bolt.transform.localPosition = new Vector3(0.026f, 0.012f, 0.0f);
+            Primitive(PrimitiveType.Cube, "BoltFace", bolt.transform, Vector3.zero, new Vector3(0.004f, 0.02f, 0.05f), a.GunSteel, false);
+            Primitive(PrimitiveType.Cube, "ChargingHandle", bolt.transform, new Vector3(0.01f, 0f, -0.01f), new Vector3(0.018f, 0.008f, 0.012f), a.GunMetal, false);
+            // Stock: buffer tube + pad
+            GameObject tube = Primitive(PrimitiveType.Cylinder, "StockTube", t, new Vector3(0f, 0.0f, -0.25f), new Vector3(0.026f, 0.08f, 0.026f), a.GunMetal, false);
+            tube.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            Primitive(PrimitiveType.Cube, "StockPad", t, new Vector3(0f, -0.005f, -0.34f), new Vector3(0.036f, 0.07f, 0.03f), a.GunPolymer, false);
+
             var muzzle = new GameObject("Muzzle");
             muzzle.transform.SetParent(t, false);
-            muzzle.transform.localPosition = new Vector3(0f, 0.015f, 0.36f);
+            muzzle.transform.localPosition = new Vector3(0f, 0.012f, 0.415f);
+            var port = new GameObject("EjectionPort");
+            port.transform.SetParent(t, false);
+            port.transform.localPosition = new Vector3(0.03f, 0.02f, 0.0f);
+            port.transform.localRotation = Quaternion.Euler(0f, 20f, 0f); // +X: out and a little back
             vm.SetMuzzle(muzzle.transform);
+            vm.SetParts(port.transform, mag.transform, bolt.transform);
             Layers.SetRecursively(root, Layers.WeaponViewIndex);
             return Save(root);
         }
 
+        /// <summary>Greybox pistol: serrated steel slide over a polymer frame, exposed barrel, hammer, sights, rail.</summary>
         private static GameObject CreatePistolViewModel(GameAssets a)
         {
             var root = new GameObject("VM_Pistol");
             var vm = root.AddComponent<WeaponViewModel>();
             Transform t = root.transform;
-            Primitive(PrimitiveType.Cube, "Slide", t, new Vector3(0f, 0.02f, 0.04f), new Vector3(0.035f, 0.045f, 0.2f), a.GunMetal, false);
-            Primitive(PrimitiveType.Cube, "Frame", t, new Vector3(0f, -0.01f, 0.02f), new Vector3(0.03f, 0.03f, 0.14f), a.GunMetal, false);
-            GameObject grip = Primitive(PrimitiveType.Cube, "Grip", t, new Vector3(0f, -0.07f, -0.04f), new Vector3(0.03f, 0.11f, 0.04f), a.GunAccent, false);
-            grip.transform.localRotation = Quaternion.Euler(15f, 0f, 0f);
-            Primitive(PrimitiveType.Cube, "Sight", t, new Vector3(0f, 0.05f, -0.03f), new Vector3(0.01f, 0.015f, 0.02f), a.GunMetal, false);
+
+            // Slide (animated) with rear serrations and the barrel visible at the front
+            var slide = new GameObject("Slide");
+            slide.transform.SetParent(t, false);
+            slide.transform.localPosition = new Vector3(0f, 0.022f, 0.03f);
+            Primitive(PrimitiveType.Cube, "SlideBody", slide.transform, Vector3.zero, new Vector3(0.034f, 0.04f, 0.2f), a.GunSteel, false);
+            for (int i = 0; i < 4; i++)
+            {
+                Primitive(PrimitiveType.Cube, $"Serration{i}", slide.transform, new Vector3(0f, 0.004f, -0.07f - i * 0.012f), new Vector3(0.036f, 0.028f, 0.004f), a.GunMetal, false);
+            }
+
+            Primitive(PrimitiveType.Cube, "RearSight", slide.transform, new Vector3(0f, 0.025f, -0.085f), new Vector3(0.024f, 0.01f, 0.01f), a.GunMetal, false);
+            Primitive(PrimitiveType.Cube, "FrontSight", slide.transform, new Vector3(0f, 0.025f, 0.09f), new Vector3(0.004f, 0.01f, 0.006f), a.GunMetal, false);
+            Primitive(PrimitiveType.Cube, "EjectionCut", slide.transform, new Vector3(0.017f, 0.006f, 0.0f), new Vector3(0.002f, 0.014f, 0.03f), a.GunPolymer, false);
+            GameObject barrel = Primitive(PrimitiveType.Cylinder, "Barrel", t, new Vector3(0f, 0.022f, 0.135f), new Vector3(0.014f, 0.006f, 0.014f), a.GunMetal, false);
+            barrel.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            // Frame, rail, trigger group, hammer
+            Primitive(PrimitiveType.Cube, "Frame", t, new Vector3(0f, -0.008f, 0.02f), new Vector3(0.03f, 0.024f, 0.16f), a.GunPolymer, false);
+            Primitive(PrimitiveType.Cube, "Rail", t, new Vector3(0f, -0.024f, 0.07f), new Vector3(0.026f, 0.008f, 0.05f), a.GunPolymer, false);
+            Primitive(PrimitiveType.Cube, "TriggerGuard", t, new Vector3(0f, -0.045f, -0.005f), new Vector3(0.01f, 0.004f, 0.05f), a.GunPolymer, false);
+            Primitive(PrimitiveType.Cube, "TriggerGuardFront", t, new Vector3(0f, -0.03f, 0.02f), new Vector3(0.01f, 0.03f, 0.004f), a.GunPolymer, false);
+            Primitive(PrimitiveType.Cube, "Trigger", t, new Vector3(0f, -0.032f, -0.002f), new Vector3(0.005f, 0.018f, 0.005f), a.GunMetal, false);
+            Primitive(PrimitiveType.Cube, "Hammer", t, new Vector3(0f, 0.03f, -0.075f), new Vector3(0.008f, 0.02f, 0.008f), a.GunMetal, false);
+            // Grip with the magazine (animated) inside it
+            var grip = new GameObject("GripPivot");
+            grip.transform.SetParent(t, false);
+            grip.transform.localPosition = new Vector3(0f, -0.02f, -0.04f);
+            grip.transform.localRotation = Quaternion.Euler(18f, 0f, 0f);
+            Primitive(PrimitiveType.Cube, "Grip", grip.transform, new Vector3(0f, -0.05f, 0f), new Vector3(0.03f, 0.1f, 0.04f), a.GunPolymer, false);
+            var mag = new GameObject("Magazine");
+            mag.transform.SetParent(grip.transform, false);
+            mag.transform.localPosition = new Vector3(0f, -0.1f, 0f);
+            Primitive(PrimitiveType.Cube, "MagBase", mag.transform, new Vector3(0f, -0.006f, 0.002f), new Vector3(0.032f, 0.012f, 0.044f), a.GunMetal, false);
+
             var muzzle = new GameObject("Muzzle");
             muzzle.transform.SetParent(t, false);
-            muzzle.transform.localPosition = new Vector3(0f, 0.02f, 0.15f);
+            muzzle.transform.localPosition = new Vector3(0f, 0.022f, 0.145f);
+            var port = new GameObject("EjectionPort");
+            port.transform.SetParent(t, false);
+            port.transform.localPosition = new Vector3(0.02f, 0.03f, 0.0f);
+            port.transform.localRotation = Quaternion.Euler(0f, 25f, 0f);
             vm.SetMuzzle(muzzle.transform);
+            vm.SetParts(port.transform, mag.transform, slide.transform);
             SetPrivate(vm, "hipPosition", new Vector3(0.2f, -0.18f, 0.38f));
             SetPrivate(vm, "aimPosition", new Vector3(0f, -0.11f, 0.28f));
+            SetPrivate(vm, "slideTravel", 0.022f);
+            SetPrivate(vm, "magazineDrop", 0.09f);
+            SetPrivate(vm, "kickUpDegrees", 6f);
             Layers.SetRecursively(root, Layers.WeaponViewIndex);
             return Save(root);
         }
 
         // ------------------------------------------------------------------ zombie
 
+        /// <summary>
+        /// The zombie: a jointed humanoid from primitives. Hierarchy is pivot → mesh at every joint
+        /// so <see cref="ZombieAnimator"/> rotates pivots and never scales a child by accident.
+        /// Hitboxes: head 2.5×, torso 1×, limbs per <see cref="ZombieDefinition.LimbDamageMultiplier"/>.
+        /// </summary>
         private static GameObject CreateZombie(GameAssets a)
         {
             var root = new GameObject("Zombie");
@@ -202,47 +303,144 @@ namespace Vent.Editor
             agent.enabled = false; // enabled by Zombie only once it stands on the NavMesh
             root.AddComponent<PooledObject>();
             var zombie = root.AddComponent<Zombie>();
+            float limb = a.Zombie != null ? a.Zombie.LimbDamageMultiplier : 0.65f;
 
-            var rig = new GameObject("Rig");
-            rig.transform.SetParent(root.transform, false);
-            var animator = rig.AddComponent<ZombieAnimator>();
+            var rigGo = new GameObject("Rig");
+            rigGo.transform.SetParent(root.transform, false);
+            var animator = rigGo.AddComponent<ZombieAnimator>();
+            var rig = new ZombieRig();
+            var skin = new System.Collections.Generic.List<Renderer>();
 
-            // Body pivot carries the collider; the scaled mesh is a child so children are not distorted.
-            var body = new GameObject("Body");
-            body.transform.SetParent(rig.transform, false);
-            var bodyCollider = body.AddComponent<CapsuleCollider>();
-            bodyCollider.center = new Vector3(0f, 0.95f, 0f);
-            bodyCollider.radius = 0.32f;
-            bodyCollider.height = 1.5f;
-            body.AddComponent<Hitbox>().Configure(1f, head: false);
-            Primitive(PrimitiveType.Capsule, "BodyMesh", body.transform, new Vector3(0f, 0.95f, 0f), new Vector3(0.62f, 0.7f, 0.5f), a.ZombieSkin, false);
+            // ---- Pelvis / torso ------------------------------------------------------------
+            rig.Hips = Pivot("Hips", rigGo.transform, new Vector3(0f, 0.95f, 0f));
+            GameObject pelvis = Primitive(PrimitiveType.Cube, "Pelvis", rig.Hips, new Vector3(0f, 0.02f, 0f), new Vector3(0.36f, 0.2f, 0.26f), a.ZombieClothes, false);
+            var torsoCol = rig.Hips.gameObject.AddComponent<CapsuleCollider>();
+            torsoCol.center = new Vector3(0f, 0.3f, 0.02f);
+            torsoCol.radius = 0.26f;
+            torsoCol.height = 0.95f;
+            rig.Hips.gameObject.AddComponent<Hitbox>().Configure(1f, head: false);
 
-            var head = new GameObject("Head");
-            head.transform.SetParent(body.transform, false);
-            head.transform.localPosition = new Vector3(0f, 1.72f, 0f);
-            var headCollider = head.AddComponent<SphereCollider>();
-            headCollider.radius = 0.2f;
-            head.AddComponent<Hitbox>().Configure(2.5f, head: true);
-            Primitive(PrimitiveType.Sphere, "HeadMesh", head.transform, Vector3.zero, Vector3.one * 0.4f, a.ZombieHead, false);
+            rig.Spine = Pivot("Spine", rig.Hips, new Vector3(0f, 0.1f, 0f));
+            GameObject chest = Primitive(PrimitiveType.Capsule, "Chest", rig.Spine, new Vector3(0f, 0.32f, 0.02f), new Vector3(0.5f, 0.36f, 0.34f), a.ZombieClothes, false);
+            GameObject shirtTear = Primitive(PrimitiveType.Cube, "TornShirt", rig.Spine, new Vector3(0.08f, 0.22f, 0.17f), new Vector3(0.16f, 0.18f, 0.02f), a.ZombieSkin, false);
+            skin.Add(shirtTear.GetComponent<Renderer>());
+            Primitive(PrimitiveType.Cube, "ChestWound", rig.Spine, new Vector3(-0.1f, 0.36f, 0.185f), new Vector3(0.1f, 0.12f, 0.01f), a.ZombieGore, false);
 
-            Transform leftArm = Limb("LeftArm", body.transform, new Vector3(-0.36f, 1.45f, 0f), a.ZombieSkin);
-            Transform rightArm = Limb("RightArm", body.transform, new Vector3(0.36f, 1.45f, 0f), a.ZombieSkin);
-            Primitive(PrimitiveType.Cube, "LeftLeg", rig.transform, new Vector3(-0.15f, 0.35f, 0f), new Vector3(0.18f, 0.7f, 0.18f), a.ZombieSkin, false);
-            Primitive(PrimitiveType.Cube, "RightLeg", rig.transform, new Vector3(0.15f, 0.35f, 0f), new Vector3(0.18f, 0.7f, 0.18f), a.ZombieSkin, false);
+            // ---- Neck / head ---------------------------------------------------------------
+            Transform neck = Pivot("Neck", rig.Spine, new Vector3(0f, 0.62f, 0.04f));
+            GameObject neckMesh = Primitive(PrimitiveType.Cylinder, "NeckMesh", neck, new Vector3(0f, 0.05f, 0f), new Vector3(0.13f, 0.08f, 0.13f), a.ZombieSkin, false);
+            skin.Add(neckMesh.GetComponent<Renderer>());
+            rig.Head = Pivot("Head", neck, new Vector3(0f, 0.09f, 0f));
+            var headCol = rig.Head.gameObject.AddComponent<SphereCollider>();
+            headCol.center = new Vector3(0f, 0.12f, 0.01f);
+            headCol.radius = 0.16f;
+            rig.Head.gameObject.AddComponent<Hitbox>().Configure(2.5f, head: true);
+            // Skull: a capsule lying along Z (long front-to-back), sunk onto the neck.
+            GameObject skull = Primitive(PrimitiveType.Capsule, "Skull", rig.Head, new Vector3(0f, 0.12f, 0.0f), new Vector3(0.26f, 0.15f, 0.28f), a.ZombieHead, false);
+            skull.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            skin.Add(skull.GetComponent<Renderer>());
+            foreach (float x in new[] { -0.055f, 0.055f })
+            {
+                Primitive(PrimitiveType.Sphere, x < 0 ? "EyeL" : "EyeR", rig.Head, new Vector3(x, 0.14f, 0.135f), Vector3.one * 0.05f, a.ZombieEye, false);
+                Primitive(PrimitiveType.Sphere, x < 0 ? "PupilL" : "PupilR", rig.Head, new Vector3(x, 0.14f, 0.158f), Vector3.one * 0.02f, a.ZombieClothes, false);
+            }
 
-            animator.Configure(body.transform, head.transform, leftArm, rightArm, root.GetComponentsInChildren<Renderer>());
-            zombie.Configure(a.Zombie, a.Zombies, a.Kill, animator);
+            Primitive(PrimitiveType.Cube, "HeadWound", rig.Head, new Vector3(0.09f, 0.19f, 0.04f), new Vector3(0.08f, 0.05f, 0.1f), a.ZombieGore, false);
+            rig.Jaw = Pivot("Jaw", rig.Head, new Vector3(0f, 0.04f, 0.03f));
+            GameObject jawMesh = Primitive(PrimitiveType.Cube, "JawMesh", rig.Jaw, new Vector3(0f, -0.02f, 0.06f), new Vector3(0.16f, 0.055f, 0.15f), a.ZombieHead, false);
+            skin.Add(jawMesh.GetComponent<Renderer>());
+            Primitive(PrimitiveType.Cube, "Teeth", rig.Jaw, new Vector3(0f, 0.01f, 0.125f), new Vector3(0.11f, 0.018f, 0.02f), a.ZombieEye, false);
+
+            // ---- Arms ----------------------------------------------------------------------
+            (rig.LeftShoulder, rig.LeftElbow) = ArmChain("Left", rig.Spine, new Vector3(-0.27f, 0.5f, 0.02f), a, skin, limb);
+            (rig.RightShoulder, rig.RightElbow) = ArmChain("Right", rig.Spine, new Vector3(0.27f, 0.5f, 0.02f), a, skin, limb);
+
+            // ---- Legs ----------------------------------------------------------------------
+            (rig.LeftHip, rig.LeftKnee) = LegChain("Left", rig.Hips, new Vector3(-0.12f, -0.05f, 0f), a, skin, limb);
+            (rig.RightHip, rig.RightKnee) = LegChain("Right", rig.Hips, new Vector3(0.12f, -0.05f, 0f), a, skin, limb);
+
+            // ---- Health bar ----------------------------------------------------------------
+            var barGo = new GameObject("HealthBar");
+            barGo.transform.SetParent(root.transform, false);
+            barGo.transform.localPosition = new Vector3(0f, 2.25f, 0f);
+            var bar = barGo.AddComponent<ZombieHealthBar>();
+            GameObject track = Primitive(PrimitiveType.Quad, "Track", barGo.transform, Vector3.zero, new Vector3(0.62f, 0.07f, 1f), a.HealthBarTrack, false);
+            GameObject fill = Primitive(PrimitiveType.Quad, "Fill", barGo.transform, new Vector3(0f, 0f, -0.001f), new Vector3(0.58f, 0.045f, 1f), a.HealthBarFill, false);
+            foreach (GameObject q in new[] { track, fill })
+            {
+                var r = q.GetComponent<Renderer>();
+                r.shadowCastingMode = ShadowCastingMode.Off;
+                r.receiveShadows = false;
+            }
+
+            bar.Configure(zombie, fill.transform, fill.GetComponent<Renderer>(), track.GetComponent<Renderer>());
+
+            foreach (Renderer r in root.GetComponentsInChildren<Renderer>())
+            {
+                r.shadowCastingMode = r.gameObject.name is "Track" or "Fill" ? ShadowCastingMode.Off : ShadowCastingMode.On;
+            }
+
+            animator.Configure(rig, skin.ToArray());
+            zombie.Configure(a.Zombie, a.Zombies, a.Kill, a.Noise, animator);
             Layers.SetRecursively(root, Layers.ZombieIndex);
             return Save(root);
         }
 
-        private static Transform Limb(string name, Transform parent, Vector3 pivot, Material material)
+        private static Transform Pivot(string name, Transform parent, Vector3 localPosition)
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
-            go.transform.localPosition = pivot;
-            Primitive(PrimitiveType.Cube, "Mesh", go.transform, new Vector3(0f, -0.3f, 0f), new Vector3(0.14f, 0.6f, 0.14f), material, false);
+            go.transform.localPosition = localPosition;
             return go.transform;
+        }
+
+        /// <summary>Shoulder pivot → upper arm → elbow pivot → forearm → hand. Colliders on both segments (limb multiplier).</summary>
+        private static (Transform shoulder, Transform elbow) ArmChain(string side, Transform parent, Vector3 shoulderPos, GameAssets a,
+            System.Collections.Generic.List<Renderer> skin, float limbMultiplier)
+        {
+            Transform shoulder = Pivot($"{side}Shoulder", parent, shoulderPos);
+            GameObject sleeve = Primitive(PrimitiveType.Capsule, "UpperArm", shoulder, new Vector3(0f, -0.15f, 0f), new Vector3(0.13f, 0.17f, 0.13f), a.ZombieClothes, false);
+            LimbCollider(shoulder.gameObject, new Vector3(0f, -0.15f, 0f), 0.065f, 0.34f, limbMultiplier);
+
+            Transform elbow = Pivot($"{side}Elbow", shoulder, new Vector3(0f, -0.3f, 0f));
+            GameObject forearm = Primitive(PrimitiveType.Capsule, "Forearm", elbow, new Vector3(0f, -0.14f, 0f), new Vector3(0.11f, 0.16f, 0.11f), a.ZombieSkin, false);
+            skin.Add(forearm.GetComponent<Renderer>());
+            GameObject hand = Primitive(PrimitiveType.Cube, "Hand", elbow, new Vector3(0f, -0.31f, 0.01f), new Vector3(0.09f, 0.1f, 0.05f), a.ZombieSkin, false);
+            skin.Add(hand.GetComponent<Renderer>());
+            for (int i = 0; i < 3; i++)
+            {
+                GameObject finger = Primitive(PrimitiveType.Cube, $"Finger{i}", elbow, new Vector3(-0.025f + 0.025f * i, -0.39f, 0.02f), new Vector3(0.018f, 0.07f, 0.018f), a.ZombieSkin, false);
+                finger.transform.localRotation = Quaternion.Euler(-25f, 0f, 0f);
+                skin.Add(finger.GetComponent<Renderer>());
+            }
+
+            LimbCollider(elbow.gameObject, new Vector3(0f, -0.2f, 0f), 0.06f, 0.42f, limbMultiplier);
+            return (shoulder, elbow);
+        }
+
+        /// <summary>Hip pivot → thigh → knee pivot → shin → foot.</summary>
+        private static (Transform hip, Transform knee) LegChain(string side, Transform parent, Vector3 hipPos, GameAssets a,
+            System.Collections.Generic.List<Renderer> skin, float limbMultiplier)
+        {
+            Transform hip = Pivot($"{side}Hip", parent, hipPos);
+            Primitive(PrimitiveType.Capsule, "Thigh", hip, new Vector3(0f, -0.22f, 0f), new Vector3(0.17f, 0.24f, 0.17f), a.ZombieClothes, false);
+            LimbCollider(hip.gameObject, new Vector3(0f, -0.22f, 0f), 0.085f, 0.46f, limbMultiplier);
+
+            Transform knee = Pivot($"{side}Knee", hip, new Vector3(0f, -0.45f, 0f));
+            GameObject shin = Primitive(PrimitiveType.Capsule, "Shin", knee, new Vector3(0f, -0.22f, 0f), new Vector3(0.14f, 0.23f, 0.14f), a.ZombieSkin, false);
+            skin.Add(shin.GetComponent<Renderer>());
+            Primitive(PrimitiveType.Cube, "Foot", knee, new Vector3(0f, -0.46f, 0.06f), new Vector3(0.12f, 0.07f, 0.26f), a.ZombieClothes, false);
+            LimbCollider(knee.gameObject, new Vector3(0f, -0.24f, 0f), 0.07f, 0.5f, limbMultiplier);
+            return (hip, knee);
+        }
+
+        private static void LimbCollider(GameObject go, Vector3 center, float radius, float height, float multiplier)
+        {
+            var col = go.AddComponent<CapsuleCollider>();
+            col.center = center;
+            col.radius = radius;
+            col.height = height;
+            go.AddComponent<Hitbox>().Configure(multiplier, head: false);
         }
 
         // ------------------------------------------------------------------ vent
@@ -341,6 +539,7 @@ namespace Vent.Editor
             inventory.LevelUpChannel = a.WeaponLevelUp;
             inventory.KillChannel = a.Kill;
             inventory.HitChannel = a.Hit;
+            inventory.NoiseChannel = a.Noise;
             character.Configure(a.InputReader, cam, inventory, motion, a.Level);
 
             root.layer = Layers.PlayerIndex;
@@ -405,6 +604,19 @@ namespace Vent.Editor
             }
 
             prop.vector3Value = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        public static void SetPrivate(Object target, string field, float value)
+        {
+            var so = new SerializedObject(target);
+            SerializedProperty prop = so.FindProperty(field);
+            if (prop == null)
+            {
+                throw new System.ArgumentException($"{target.GetType().Name} has no serialized field '{field}'");
+            }
+
+            prop.floatValue = value;
             so.ApplyModifiedPropertiesWithoutUndo();
         }
     }

@@ -6,6 +6,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
 using Vent.Core;
@@ -28,6 +29,8 @@ namespace Vent.Editor
     /// </summary>
     public static class SceneBuilder
     {
+        private static VolumeProfile postFx;
+
         [MenuItem("Vent/4. Generate Scenes")]
         public static void GenerateMenu()
         {
@@ -47,11 +50,13 @@ namespace Vent.Editor
             a.TracerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{Paths.Prefabs}/VFX_Tracer.prefab");
             a.ImpactPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{Paths.Prefabs}/VFX_Impact.prefab");
             a.BloodImpactPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{Paths.Prefabs}/VFX_BloodImpact.prefab");
+            a.ShellCasingPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{Paths.Prefabs}/VFX_ShellCasing.prefab");
         }
 
         public static void BuildAll(GameAssets a)
         {
             LightingSettings lighting = EnsureLightingSettings();
+            postFx = BuildPostProcessProfile();
             BuildBoot(a, lighting);
             BuildMainMenu(a, lighting);
             BuildBuilding(a, lighting);
@@ -196,6 +201,9 @@ namespace Vent.Editor
             cam.nearClipPlane = 0.1f;
             cam.farClipPlane = 60f;
             camGo.AddComponent<AudioListener>();
+            UniversalAdditionalCameraData camData = cam.GetUniversalAdditionalCameraData();
+            camData.renderPostProcessing = true;
+            camData.antialiasing = AntialiasingMode.FastApproximateAntialiasing;
             var orbit = camGo.AddComponent<MenuCameraOrbit>();
             orbit.Configure(Vector3.up * 1.2f, 3.2f, 0.5f); // height is relative to the pivot
 
@@ -214,7 +222,7 @@ namespace Vent.Editor
             var systems = new GameObject("Systems");
             systems.transform.position = building.PlayerSpawn; // pooled instances are parked here, on the NavMesh
             var pools = systems.AddComponent<PoolRegistry>();
-            SetPrewarm(pools, (a.ZombiePrefab, 12), (a.TracerPrefab, 24), (a.MuzzleFlashPrefab, 6), (a.ImpactPrefab, 24), (a.BloodImpactPrefab, 24));
+            SetPrewarm(pools, (a.ZombiePrefab, 12), (a.TracerPrefab, 24), (a.MuzzleFlashPrefab, 6), (a.ImpactPrefab, 24), (a.BloodImpactPrefab, 24), (a.ShellCasingPrefab, 40));
 
             var spawner = systems.AddComponent<ZombieSpawner>();
             spawner.Configure(a.Difficulty, a.Zombie, a.Zombies, a.Vents, a.Level);
@@ -259,16 +267,78 @@ namespace Vent.Editor
             return scene;
         }
 
-        /// <summary>Indoor mood: flat dim ambient and light fog so distant rooms recede.</summary>
+        /// <summary>
+        /// Indoor mood: flat dim ambient, light fog so distant rooms recede, and a global post-processing
+        /// volume (bloom off the light panels, ACES tonemap, vignette, grain).
+        /// </summary>
         private static void ApplyInteriorRenderSettings()
         {
-            RenderSettings.ambientMode = AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.16f, 0.17f, 0.2f);
+            // Trilight ambient: brighter from above, darker from below, so unlit corners still read as a room.
+            RenderSettings.ambientMode = AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor = new Color(0.56f, 0.57f, 0.64f);
+            RenderSettings.ambientEquatorColor = new Color(0.44f, 0.44f, 0.48f);
+            RenderSettings.ambientGroundColor = new Color(0.24f, 0.23f, 0.25f);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogDensity = 0.03f;
-            RenderSettings.fogColor = new Color(0.04f, 0.045f, 0.05f);
-            RenderSettings.skybox = null;
+            RenderSettings.fogDensity = 0.018f;
+            RenderSettings.fogColor = new Color(0.10f, 0.08f, 0.09f); // dusk haze, matches the sky seen through the glass
+            RenderSettings.skybox = AssetDatabase.LoadAssetAtPath<Material>($"{Paths.Materials}/M_Skybox.mat");
+            // The sky is for looking at through the glass, not for reflecting off every floor: no default
+            // (skybox) reflection probe indoors, or the whole building takes on the dusk tint.
+            RenderSettings.defaultReflectionMode = DefaultReflectionMode.Custom;
+            RenderSettings.customReflectionTexture = null;
+
+            var volumeGo = new GameObject("PostProcessing");
+            Volume volume = volumeGo.AddComponent<Volume>();
+            volume.isGlobal = true;
+            volume.priority = 0f;
+            volume.sharedProfile = postFx != null ? postFx : AssetDatabase.LoadAssetAtPath<VolumeProfile>(Paths.PostProcessProfile);
+        }
+
+        /// <summary>
+        /// The one post-processing profile both lit scenes share. Rebuilt from code every run so the
+        /// look is reviewable in a diff; components are sub-assets, so the profile is a single file.
+        /// </summary>
+        private static VolumeProfile BuildPostProcessProfile()
+        {
+            AssetDatabase.DeleteAsset(Paths.PostProcessProfile);
+            var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+            profile.name = "VentPostFx";
+            AssetDatabase.CreateAsset(profile, Paths.PostProcessProfile);
+
+            T Add<T>() where T : VolumeComponent
+            {
+                T component = profile.Add<T>();
+                component.name = typeof(T).Name;
+                AssetDatabase.AddObjectToAsset(component, profile);
+                return component;
+            }
+
+            Tonemapping tone = Add<Tonemapping>();
+            tone.mode.Override(TonemappingMode.ACES);
+
+            Bloom bloom = Add<Bloom>();
+            bloom.threshold.Override(1.0f);
+            bloom.intensity.Override(0.55f);
+            bloom.scatter.Override(0.65f);
+
+            ColorAdjustments color = Add<ColorAdjustments>();
+            color.postExposure.Override(0.8f);
+            color.contrast.Override(5f);
+            color.saturation.Override(-15f);
+            color.colorFilter.Override(new Color(0.92f, 0.96f, 1f));
+
+            Vignette vignette = Add<Vignette>();
+            vignette.intensity.Override(0.18f);
+            vignette.smoothness.Override(0.45f);
+
+            FilmGrain grain = Add<FilmGrain>();
+            grain.type.Override(FilmGrainLookup.Thin1);
+            grain.intensity.Override(0.2f);
+
+            EditorUtility.SetDirty(profile);
+            AssetDatabase.SaveAssets();
+            return profile;
         }
 
         private static LightingSettings EnsureLightingSettings()
