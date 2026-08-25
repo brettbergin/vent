@@ -114,6 +114,20 @@ references never break. Edit the defaults in code, regenerate, commit.
   NavMesh, the building is sealed, a zombie emerges/chases/dies with kill credit, firing consumes
   ammo and kills level the weapon, and N kills advance the level and refill ammo.
 
+## Conventions worth knowing
+
+* **One `MonoBehaviour`/`ScriptableObject` per file, named after the class.** Unity resolves an
+  asset's script by file name; a class that shares a file loads as "missing script". The EditMode
+  test `ScriptFileNamingTests` fails the build if this is violated.
+* The `tools/*.sh` scripts are bash; run them directly (`./tools/test.sh`) rather than sourcing
+  them from zsh.
+* Regeneration is idempotent: existing assets keep their GUIDs, prefabs and scenes are rewritten.
+
+## Verification status
+
+Last verified on Unity 6000.3.22f1 (macOS, Intel): headless regeneration succeeds, EditMode
+35/35 and PlayMode 6/6 pass, and `tools/build.sh` produces `Builds/Vent.app`.
+
 ## Layout
 
 ```
