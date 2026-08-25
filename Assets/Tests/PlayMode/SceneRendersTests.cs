@@ -38,7 +38,7 @@ namespace Vent.Tests.PlayMode
 
             Camera cam = Camera.main;
             Assert.IsNotNull(cam, "player camera tagged MainCamera");
-            var rt = new RenderTexture(160, 90, 24);
+            var rt = new RenderTexture(640, 360, 24);
             RenderTexture previous = cam.targetTexture;
             cam.targetTexture = rt;
             cam.Render();
@@ -49,13 +49,22 @@ namespace Vent.Tests.PlayMode
             tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
             RenderTexture.active = null;
             Color32[] px = tex.GetPixels32();
+            System.IO.Directory.CreateDirectory("Logs");
+            System.IO.File.WriteAllBytes("Logs/render-player.png", tex.EncodeToPNG()); // for eyes; the asserts below are the contract
             Object.Destroy(tex);
             Object.Destroy(rt);
 
             var distinct = new System.Collections.Generic.HashSet<int>();
-            foreach (Color32 c in px) distinct.Add((c.r >> 3 << 10) | (c.g >> 3 << 5) | (c.b >> 3));
-            Debug.Log($"[SceneRendersTests] {distinct.Count} distinct colours, centre sample={px[px.Length / 2]}");
+            int magenta = 0;
+            foreach (Color32 c in px)
+            {
+                distinct.Add((c.r >> 3 << 10) | (c.g >> 3 << 5) | (c.b >> 3));
+                if (c.r > 200 && c.b > 200 && c.g < 80) magenta++; // Unity's "shader failed" colour
+            }
+
+            Debug.Log($"[SceneRendersTests] {distinct.Count} distinct colours, magenta={magenta * 100f / px.Length:0.0}%, centre sample={px[px.Length / 2]}");
             Assert.Greater(distinct.Count, 20, "frame is nearly flat — the building is not drawing");
+            Assert.Less(magenta * 100f / px.Length, 1f, "magenta pixels: a material's shader variant failed");
         }
     }
 }

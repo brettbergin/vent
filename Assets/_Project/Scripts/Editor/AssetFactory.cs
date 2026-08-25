@@ -7,6 +7,7 @@ using UnityEngine.UIElements;
 using Vent.Core.Audio;
 using Vent.Core.Data;
 using Vent.Core.Events;
+using Vent.Core.Perks;
 using Vent.Enemies.Data;
 using Vent.Enemies.Runtime;
 using Vent.Enemies.Spawning;
@@ -45,6 +46,7 @@ namespace Vent.Editor
             a.WeaponLevelUp = Event<WeaponLevelUpEventChannel>("Evt_WeaponLevelUp", "A weapon gained a level.");
             a.Hit = Event<BoolEventChannel>("Evt_HitConfirmed", "A shot damaged something. Payload: headshot.");
             a.Noise = Event<NoiseEventChannel>("Evt_Noise", "A gunshot. Zombies within their hearing radius are alerted.");
+            a.PerkCollected = Event<PerkEventChannel>("Evt_PerkCollected", "The player picked up a perk orb. Payload: kind, duration.");
             a.GameState = Event<GameStateEventChannel>("Evt_GameState", "Application state changed.");
             a.RunSummary = Event<RunSummaryEventChannel>("Evt_RunEnded", "Final tally for the game-over screen.");
             a.BestLevel = Event<IntEventChannel>("Evt_BestLevel", "Best level on record; raised when the menu opens.");
@@ -62,6 +64,7 @@ namespace Vent.Editor
             a.Difficulty = GetOrCreate<DifficultyProfile>($"{Paths.Data}/DifficultyProfile.asset", d => d.ApplyDefaults());
             a.Zombie = GetOrCreate<ZombieDefinition>($"{Paths.Data}/Zombie.asset");
             a.WeaponLevels = GetOrCreate<WeaponLevelCurve>($"{Paths.Data}/WeaponLevels_Standard.asset", c => c.ApplyDefaults(25));
+            a.PerkDrops = GetOrCreate<PerkDropTable>($"{Paths.Data}/PerkDrops.asset", t => t.ApplyDefaults());
 
             a.Smg = GetOrCreate<WeaponDefinition>($"{Paths.Data}/Weapon_SMG.asset", w => w.Configure(
                 "SMG", WeaponSlot.Primary, FireMode.Automatic,
@@ -98,10 +101,21 @@ namespace Vent.Editor
             // ---- UI panel --------------------------------------------------------------
             a.PanelSettings = CreatePanelSettings();
 
+            // ---- Textures --------------------------------------------------------------
+            TextureFactory.TextureSet drywall = TextureFactory.Drywall();
+            TextureFactory.TextureSet ceilingTile = TextureFactory.CeilingTile();
+            TextureFactory.TextureSet vinyl = TextureFactory.VinylFloor();
+            TextureFactory.TextureSet wood = TextureFactory.Wood();
+            TextureFactory.TextureSet concrete = TextureFactory.Concrete();
+            TextureFactory.TextureSet asphalt = TextureFactory.Asphalt();
+            TextureFactory.TextureSet brushed = TextureFactory.BrushedMetal();
+            TextureFactory.TextureSet fabric = TextureFactory.Fabric();
+
             // ---- Materials -------------------------------------------------------------
-            a.Floor = Lit("M_Floor", new Color(0.32f, 0.33f, 0.34f), smoothness: 0.25f);
-            a.Wall = Lit("M_Wall", new Color(0.72f, 0.70f, 0.64f), smoothness: 0.1f);
-            a.Ceiling = Lit("M_Ceiling", new Color(0.22f, 0.23f, 0.25f), smoothness: 0.05f);
+            // Base colours tint the (near-white) albedo textures.
+            a.Floor = Lit("M_Floor", new Color(0.55f, 0.56f, 0.58f), smoothness: 0.45f, tex: vinyl);
+            a.Wall = Lit("M_Wall", new Color(0.80f, 0.78f, 0.72f), smoothness: 0.12f, tex: drywall);
+            a.Ceiling = Lit("M_Ceiling", new Color(0.74f, 0.75f, 0.75f), smoothness: 0.05f, tex: ceilingTile);
             a.Trim = Lit("M_Trim", new Color(0.12f, 0.12f, 0.13f), smoothness: 0.3f);
             a.Prop = Lit("M_Prop", new Color(0.45f, 0.36f, 0.25f), smoothness: 0.2f);
             a.PropAlt = Lit("M_PropAlt", new Color(0.30f, 0.38f, 0.32f), smoothness: 0.35f, metallic: 0.3f);
@@ -119,13 +133,13 @@ namespace Vent.Editor
             a.GunPolymer = Lit("M_GunPolymer", new Color(0.09f, 0.09f, 0.10f), smoothness: 0.28f, metallic: 0f);
             a.GunSteel = Lit("M_GunSteel", new Color(0.30f, 0.31f, 0.34f), smoothness: 0.72f, metallic: 0.85f);
             a.Brass = Lit("M_Brass", new Color(0.78f, 0.62f, 0.28f), smoothness: 0.8f, metallic: 0.9f);
-            a.Concrete = Lit("M_Concrete", new Color(0.5f, 0.5f, 0.5f), smoothness: 0.1f);
+            a.Concrete = Lit("M_Concrete", new Color(0.62f, 0.62f, 0.62f), smoothness: 0.1f, tex: concrete);
             // Furniture
-            a.Wood = Lit("M_Wood", new Color(0.42f, 0.30f, 0.20f), smoothness: 0.45f);
-            a.MetalGrey = Lit("M_MetalGrey", new Color(0.55f, 0.56f, 0.58f), smoothness: 0.6f, metallic: 0.7f);
+            a.Wood = Lit("M_Wood", new Color(0.70f, 0.58f, 0.46f), smoothness: 0.45f, tex: wood);
+            a.MetalGrey = Lit("M_MetalGrey", new Color(0.62f, 0.63f, 0.65f), smoothness: 0.6f, metallic: 0.7f, tex: brushed);
             a.MetalDark = Lit("M_MetalDark", new Color(0.14f, 0.14f, 0.15f), smoothness: 0.5f, metallic: 0.6f);
-            a.Fabric = Lit("M_Fabric", new Color(0.18f, 0.24f, 0.36f), smoothness: 0.05f);
-            a.FabricLight = Lit("M_FabricLight", new Color(0.55f, 0.56f, 0.52f), smoothness: 0.05f);
+            a.Fabric = Lit("M_Fabric", new Color(0.22f, 0.29f, 0.44f), smoothness: 0.05f, tex: fabric);
+            a.FabricLight = Lit("M_FabricLight", new Color(0.66f, 0.67f, 0.62f), smoothness: 0.05f, tex: fabric);
             a.Plastic = Lit("M_Plastic", new Color(0.08f, 0.08f, 0.09f), smoothness: 0.35f);
             a.Screen = Lit("M_Screen", new Color(0.02f, 0.03f, 0.05f), smoothness: 0.9f, emission: new Color(0.15f, 0.35f, 0.6f) * 0.9f);
             a.Paper = Lit("M_Paper", new Color(0.86f, 0.86f, 0.82f), smoothness: 0.15f);
@@ -140,9 +154,11 @@ namespace Vent.Editor
             a.LedAmber = Lit("M_LedAmber", new Color(0.9f, 0.6f, 0.1f), smoothness: 0.5f, emission: new Color(1f, 0.6f, 0.1f) * 2.5f);
             // Windows & exterior
             a.WindowGlass = LitTransparent("M_WindowGlass", new Color(0.6f, 0.75f, 0.85f, 0.22f), smoothness: 0.97f);
-            a.Asphalt = Lit("M_Asphalt", new Color(0.09f, 0.09f, 0.1f), smoothness: 0.15f);
+            a.Asphalt = Lit("M_Asphalt", new Color(0.16f, 0.16f, 0.18f), smoothness: 0.15f, tex: asphalt);
             a.DistantBuilding = Lit("M_DistantBuilding", new Color(0.10f, 0.10f, 0.13f), smoothness: 0.2f);
             a.Skybox = Skybox("M_Skybox");
+            // Tinted per perk at runtime through a MaterialPropertyBlock; the asset's white is a placeholder.
+            a.PerkOrb = Lit("M_PerkOrb", Color.white, smoothness: 0.85f, metallic: 0.1f, emission: Color.white * 2.5f);
             a.Tracer = Unlit("M_Tracer", new Color(1f, 0.85f, 0.45f));
             a.Flash = Unlit("M_Flash", new Color(1f, 0.75f, 0.3f));
             a.Spark = Particle("M_Spark", new Color(0.9f, 0.85f, 0.7f));
@@ -201,12 +217,29 @@ namespace Vent.Editor
             });
         }
 
-        private static Material Lit(string name, Color baseColor, float smoothness = 0.3f, float metallic = 0f, Color? emission = null)
+        private static Material Lit(string name, Color baseColor, float smoothness = 0.3f, float metallic = 0f, Color? emission = null, TextureFactory.TextureSet tex = null)
         {
             Material m = GetOrCreateMaterial(name, "Universal Render Pipeline/Lit");
             m.SetColor("_BaseColor", baseColor);
             m.SetFloat("_Smoothness", smoothness);
             m.SetFloat("_Metallic", metallic);
+            if (tex != null)
+            {
+                // UVs on building blocks are in metres (MeshLibrary); one repeat covers MetersPerTile of them.
+                float tiling = 1f / tex.MetersPerTile;
+                m.SetTexture("_BaseMap", tex.Albedo);
+                m.SetTextureScale("_BaseMap", new Vector2(tiling, tiling));
+                m.SetTexture("_BumpMap", tex.Normal);
+                m.SetFloat("_BumpScale", tex.NormalStrength);
+                m.EnableKeyword("_NORMALMAP");
+            }
+            else
+            {
+                m.SetTexture("_BaseMap", null);
+                m.SetTexture("_BumpMap", null);
+                m.DisableKeyword("_NORMALMAP");
+            }
+
             if (emission.HasValue)
             {
                 m.EnableKeyword("_EMISSION");

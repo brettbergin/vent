@@ -200,6 +200,7 @@ MonoBehaviour:
   aimPointHeight: 1.35
   levelChanged: {fileID: 11400000, guid: ddd74175f70a9412d9acbb5fdb68deaa, type: 2}
   healFractionOnLevelUp: 0.5
+  perkCollected: {fileID: 11400000, guid: 9e59a3e879bc0435e89339f1b78d7b4d, type: 2}
 --- !u!1 &1209904769889189285
 GameObject:
   m_ObjectHideFlags: 0

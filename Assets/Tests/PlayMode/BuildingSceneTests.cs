@@ -7,6 +7,8 @@ using UnityEngine.TestTools;
 using Vent.Core.Data;
 using Vent.Core.Damage;
 using Vent.Core.Events;
+using Vent.Core.Perks;
+using Vent.Gameplay.Perks;
 using Vent.Core.Pooling;
 using Vent.Core.Services;
 using Vent.Core.Utility;
@@ -362,6 +364,118 @@ namespace Vent.Tests.PlayMode
 
             Assert.AreEqual(ZombieState.Chasing, zombie.State, "stagger ends and the chase resumes");
             Object.Destroy(weapon);
+        }
+
+        [UnityTest]
+        public IEnumerator NukePerkKillsEveryZombieAndCountsTheKills()
+        {
+            building.BeginRun();
+            Object.FindFirstObjectByType<ZombieSpawner>().StopSpawning();
+            var vents = Object.FindObjectsByType<AirVent>(FindObjectsSortMode.None);
+            var zombieDef = Resources.FindObjectsOfTypeAll<ZombieDefinition>()[0];
+            var pools = GameServices.Get<PoolRegistry>();
+            var zombies = new Zombie[2];
+            for (int i = 0; i < zombies.Length; i++)
+            {
+                zombies[i] = pools.Spawn<Zombie>(zombieDef.Prefab, vents[i].GratePosition, Quaternion.identity);
+                zombies[i].Spawn(new ZombieStats(100f, 5f, 3f, 25), vents[i]);
+            }
+
+            float deadline = Time.time + 5f;
+            while ((zombies[0].State == ZombieState.Emerging || zombies[1].State == ZombieState.Emerging) && Time.time < deadline)
+            {
+                yield return null;
+            }
+
+            int killsBefore = building.Director.KillsThisLevel;
+            var perks = GameServices.Get<PerkSystem>();
+            int onFloorBefore = perks.LiveCount;
+
+            Resources.FindObjectsOfTypeAll<PerkEventChannel>()[0].Raise(new PerkInfo(PerkKind.Nuke, 0f));
+            yield return null;
+
+            foreach (Zombie z in zombies)
+            {
+                Assert.IsFalse(z.IsAlive, "the nuke kills every zombie");
+            }
+
+            Assert.AreEqual(killsBefore + 2, building.Director.KillsThisLevel, "nuke kills count toward the level");
+            Assert.AreEqual(onFloorBefore, perks.LiveCount, "nuke kills never drop perks");
+        }
+
+        [UnityTest]
+        public IEnumerator PerkOrbIsCollectedByWalkingIntoItAndAppliesItsEffect()
+        {
+            building.BeginRun();
+            Object.FindFirstObjectByType<ZombieSpawner>().StopSpawning();
+            var perks = GameServices.Get<PerkSystem>();
+            PerkEventChannel channel = Resources.FindObjectsOfTypeAll<PerkEventChannel>()[0];
+
+            PerkInfo? collected = null;
+            void OnPerk(PerkInfo p) => collected = p;
+            channel.Subscribe(OnPerk);
+            try
+            {
+                Vector3 spot = player.Position + player.transform.forward * 3f;
+                PerkPickup orb = perks.Drop(new PerkInfo(PerkKind.Invulnerable, 8f), spot);
+                Assert.IsNotNull(orb);
+                Assert.IsTrue(orb.IsLive);
+                Assert.AreEqual(1, perks.LiveCount);
+                yield return null;
+                Assert.IsNull(collected, "an orb three metres away is not collected");
+
+                player.Controller.Teleport(new Vector3(orb.transform.position.x, player.Position.y, orb.transform.position.z), player.transform.rotation);
+                float deadline = Time.time + 2f;
+                while (collected == null && Time.time < deadline)
+                {
+                    yield return null;
+                }
+
+                Assert.IsTrue(collected.HasValue, "walking into the orb collects it");
+                Assert.AreEqual(PerkKind.Invulnerable, collected.Value.Kind);
+                Assert.IsFalse(orb.IsLive);
+                Assert.AreEqual(0, perks.LiveCount);
+
+                Assert.IsTrue(player.Health.IsInvulnerable, "the Invulnerable perk applies to the player");
+                DamageResult hit = player.Health.ApplyDamage(new DamageInfo(30f, DamageKind.Melee, null, player.AimPoint, Vector3.back, Vector3.forward));
+                Assert.IsTrue(hit.Ignored);
+                Assert.AreEqual(player.Health.Max, player.Health.Current);
+            }
+            finally
+            {
+                channel.Unsubscribe(OnPerk);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator OneShotAndInstantReloadPerksApplyToTheWeapons()
+        {
+            building.BeginRun();
+            Object.FindFirstObjectByType<ZombieSpawner>().StopSpawning();
+            PerkEventChannel channel = Resources.FindObjectsOfTypeAll<PerkEventChannel>()[0];
+            Weapon gun = player.Inventory.Current;
+            yield return null;
+
+            channel.Raise(new PerkInfo(PerkKind.OneShot, 5f));
+            foreach (Weapon w in player.Inventory.Weapons)
+            {
+                Assert.IsTrue(w.OneShotActive, $"{w.Definition.DisplayName} gets One Shot");
+            }
+
+            // Fire until the magazine is short, then the perk refills it at once.
+            player.SetControlsEnabled(true);
+            int full = gun.Capacity;
+            float deadline = Time.time + 3f;
+            while (gun.Magazine == full && Time.time < deadline)
+            {
+                gun.PullTrigger();
+                yield return null;
+            }
+
+            gun.ReleaseTrigger();
+            Assert.Less(gun.Magazine, full, "a shot left the magazine short");
+            channel.Raise(new PerkInfo(PerkKind.InstantReload, 0f));
+            Assert.AreEqual(full, gun.Magazine, "Instant Reload fills the magazine immediately");
         }
     }
 }

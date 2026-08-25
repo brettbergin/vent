@@ -24,6 +24,48 @@ namespace Vent.Editor
         public static void SnapshotPistol() => Snapshot($"{Paths.Prefabs}/VM_Pistol.prefab", new Vector3(0.3f, 0.15f, -0.25f), new Vector3(0f, 0f, 0.02f), 0.6f);
 
         /// <summary>Photograph every furnished room of the generated Building scene from a high corner.</summary>
+        /// <summary>What the player sees on frame one: from the spawn point, at eye height, facing the spawn yaw, plus a look to each side.</summary>
+        [MenuItem("Vent/Snapshot Player View")]
+        public static void SnapshotPlayerView()
+        {
+            Scene scene = EditorSceneManager.OpenScene(Paths.BuildingScene, OpenSceneMode.Single);
+            GameObject spawn = GameObject.Find("PlayerSpawn");
+            if (spawn == null)
+            {
+                Debug.LogError("[Vent] Building scene has no PlayerSpawn; regenerate first.");
+                return;
+            }
+
+            var camGo = new GameObject("SnapshotCamera");
+            var cam = camGo.AddComponent<Camera>();
+            cam.fieldOfView = 70f;
+            cam.GetUniversalAdditionalCameraData().renderPostProcessing = true;
+            cam.nearClipPlane = 0.1f;
+            cam.clearFlags = CameraClearFlags.Skybox;
+            Directory.CreateDirectory("Logs");
+            const int w = 1200, h = 800;
+            var rt = new RenderTexture(w, h, 24);
+            var tex = new Texture2D(w, h, TextureFormat.RGB24, false);
+            foreach ((string name, float yawOffset) in new[] { ("forward", 0f), ("left", -90f), ("right", 90f), ("back", 180f) })
+            {
+                cam.transform.position = spawn.transform.position + Vector3.up * 1.6f;
+                cam.transform.rotation = spawn.transform.rotation * Quaternion.Euler(0f, yawOffset, 0f);
+                cam.targetTexture = rt;
+                cam.Render();
+                RenderTexture.active = rt;
+                tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+                tex.Apply();
+                RenderTexture.active = null;
+                cam.targetTexture = null;
+                File.WriteAllBytes(Path.Combine("Logs", $"snapshot-Player_{name}.png"), tex.EncodeToPNG());
+            }
+
+            Object.DestroyImmediate(tex);
+            Object.DestroyImmediate(rt);
+            Object.DestroyImmediate(camGo);
+            Debug.Log("[Vent] Player view snapshots written to Logs/snapshot-Player_*.png");
+        }
+
         [MenuItem("Vent/Snapshot Rooms")]
         public static void SnapshotRooms()
         {

@@ -56,6 +56,12 @@ Controls: WASD move · Shift sprint · Space jump · Mouse look · LMB fire · R
   (`DifficultyProfile.Aggression` → `ZombieStats.From` → `Zombie` states `Wandering`/`Chasing`.)
 * Zombie damage is `baseDamage × DamageMultiplier(level)`; zombies already alive are re-scaled when
   the level changes, so damage is always relative to the level being played.
+* **Perks.** A weapon kill has a chance (`PerkDropTable`, default 12%) to leave a glowing orb where
+  the zombie fell; walk through it to collect. Instant Reload tops up both guns at once, Invulnerable
+  (10 s) ignores damage, One Shot (8 s) makes any hit lethal, Nuke kills every zombie in the building
+  (those kills count toward the level, but not toward weapon XP, and never drop more perks).
+  Orbs fade after 25 s and at most three lie around at once. (`Core/Perks`, `Gameplay/Perks/PerkSystem`,
+  `Evt_PerkCollected` → player / weapons / HUD.)
 
 ## Architecture
 
@@ -88,6 +94,8 @@ Patterns you will see, and why:
 | **Gun handling in numbers** | `Weapons/Runtime/Ballistics.cs`, `WeaponDefinition` "handling" | Chambered round (+1 on a tactical reload), slower empty reload that ends with a rack, recoil that climbs over sustained fire, damage falloff by distance, per-weapon flash size. Pure arithmetic is unit tested. |
 | **Camera stacking** | `PrefabFactory.CreatePlayer` | URP overlay camera renders the gun so it never clips into walls. |
 | **Generated post-processing** | `SceneBuilder.BuildPostProcessProfile` | One `VolumeProfile` (ACES, bloom off the emissive panels, grading, vignette, grain) built from code; a global `Volume` in each lit scene. |
+| **Generated textures, world-scale UVs** | `Editor/TextureFactory.cs`, `Editor/MeshLibrary.cs` | Drywall, ceiling tile, vinyl, wood, concrete, asphalt, brushed metal and fabric are synthesised (albedo + normal) from tileable noise and written as PNGs at regen; still no hand-made binary art. Building blocks use cube meshes whose UVs are in metres, so a 50 cm floor tile is 50 cm on every block. |
+| **Baked bounce, realtime direct** | `SceneBuilder.EnsureLightingSettings` / `Bake`, `BuildingGenerator.BuildProbes` | Lights are Mixed (Indirect Only): direct light and shadows stay realtime, the CPU lightmapper bakes the bounce into lightmaps and a light-probe grid (two heights per room) at regen (~1.5 min). Per-room box-projected reflection probes render once on load — a headless editor bake writes garbage cubemaps, and `SceneRendersTests` fails on the magenta that produces. SSAO is on in `PC_Renderer` (`ProjectBootstrap.ConfigureAmbientOcclusion`). |
 | **Forward+ lighting, no GPU Resident Drawer** | `Assets/Settings/PC_RPAsset.asset`, `BuildingGenerator` | Room lights cast hard shadows within a 20 m shadow distance. The GPU Resident Drawer is deliberately **off**: with it on, the macOS player drew only the clear colour (its instancing shader variants were stripped from the build; the editor keeps every variant, so it looked fine there). `GeneratedSceneTests` pins this. Geometry stays static-batched. |
 | **UI Toolkit + runtime data binding** | `UI/*.uxml`, `UI/Screens`, `HudViewModel` | Screens are documents + a controller bound to channels; visibility follows `GameState`. The HUD binds declaratively (`<Bindings>` in `Hud.uxml`) to a plain `HudViewModel`; the controller only writes the model. |
 
@@ -99,8 +107,9 @@ Patterns you will see, and why:
 4. `Player/PlayerCharacter.cs` → `Movement/FirstPersonController.cs` → `Movement/PlayerLook.cs`
 5. `Weapons/Runtime/Weapon.cs` → `WeaponInventory.cs` → `Progression/WeaponProgression.cs`
 6. `Enemies/Runtime/Zombie.cs` → `Spawning/ZombieSpawner.cs` → `Spawning/AirVent.cs`
-7. `UI/Screens/HudScreen.cs`
-8. `Editor/Bootstrap.cs` → `BuildingGenerator.cs` → `PrefabFactory.cs` → `SceneBuilder.cs`
+7. `Core/Perks/PerkDropTable.cs` → `Gameplay/Perks/PerkSystem.cs` → `Core/Perks/PerkPickup.cs`
+8. `UI/Screens/HudScreen.cs`
+9. `Editor/Bootstrap.cs` → `BuildingGenerator.cs` → `PrefabFactory.cs` → `SceneBuilder.cs`
 
 ## Tuning
 
@@ -109,6 +118,8 @@ Patterns you will see, and why:
   the first zombie) and `levelStartGrace` (seconds of breather after each level-up).
 * Guns: `Data/Weapon_SMG.asset`, `Data/Weapon_Pistol.asset`; level scaling in
   `Data/WeaponLevels_Standard.asset` (`WeaponLevelCurve.ApplyDefaults()`).
+* Perks: `Data/PerkDrops.asset` — drop chance, per-kind weights and durations, orb lifetime and floor cap
+  (`PerkDropTable.ApplyDefaults()`). Colours and names in `Core/Perks/PerkStyle.cs`.
 * Zombie: `Data/Zombie.asset` — base stats, melee timing, hit reactions (stagger threshold and
   length, limb damage multiplier), and the "annoyed" ends of the aggression ranges (notice/hearing
   radii, slower strikes, wander speed); the enraged ends are the base values.
@@ -156,7 +167,7 @@ Last verified on Unity 6000.3.22f1 (macOS, Intel): headless regeneration succeed
 
 ```
 Assets/_Project/Scripts/{Core,Player,Weapons,Enemies,Gameplay,UI,Editor}   source, one asmdef each
-Assets/_Project/{Data,Prefabs,Materials,Scenes,UI}                         generated (UXML/USS are hand-written)
+Assets/_Project/{Data,Prefabs,Materials,Textures,Meshes,Scenes,UI}         generated (UXML/USS are hand-written; Scenes/<name>/ holds the baked lightmaps)
 Assets/Tests/{EditMode,PlayMode}
 Assets/Settings                                                            URP assets from the Unity template
 tools/                                                                     headless regen / test / build scripts

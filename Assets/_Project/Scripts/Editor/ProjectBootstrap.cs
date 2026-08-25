@@ -21,9 +21,37 @@ namespace Vent.Editor
             EnsureLayers();
             ConfigureCollisionMatrix();
             ConfigurePlayerSettings();
+            ConfigureAmbientOcclusion();
             ConfigureBuildScenes();
             AssetDatabase.SaveAssets();
             Debug.Log("[Vent] Project settings applied.");
+        }
+
+        /// <summary>
+        /// Screen-space ambient occlusion on the PC renderer: the dark crease where a desk meets the
+        /// floor. The template ships it weak; this makes it read.
+        /// </summary>
+        public static void ConfigureAmbientOcclusion()
+        {
+            const string rendererPath = "Assets/Settings/PC_Renderer.asset";
+            foreach (Object sub in AssetDatabase.LoadAllAssetsAtPath(rendererPath))
+            {
+                if (sub == null || sub.GetType().Name != "ScreenSpaceAmbientOcclusion")
+                {
+                    continue;
+                }
+
+                var so = new SerializedObject(sub);
+                SerializedProperty settings = so.FindProperty("m_Settings");
+                settings.FindPropertyRelative("Intensity").floatValue = 1.1f;
+                settings.FindPropertyRelative("Radius").floatValue = 0.45f;
+                settings.FindPropertyRelative("DirectLightingStrength").floatValue = 0.35f;
+                settings.FindPropertyRelative("Samples").intValue = 2; // high
+                settings.FindPropertyRelative("Downsample").boolValue = false;
+                so.FindProperty("m_Active").boolValue = true;
+                so.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(sub);
+            }
         }
 
         public static void EnsureFolders()

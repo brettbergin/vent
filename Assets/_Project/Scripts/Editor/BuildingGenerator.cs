@@ -15,7 +15,7 @@ namespace Vent.Editor
     {
         public int Columns = 4;
         public int Rows = 3;
-        public float CellSize = 10f;
+        public float CellSize = 15f; // room edge length; the whole building scales off this
         public float WallThickness = 0.3f;
         public float Height = 3.2f;
         public float DoorWidth = 2.0f;
@@ -55,7 +55,7 @@ namespace Vent.Editor
         // BatchingStatic matters: without the GPU Resident Drawer (see README, "GPU Resident Drawer")
         // every block is its own draw call otherwise.
         private static readonly StaticEditorFlags StaticFlags =
-            StaticEditorFlags.BatchingStatic | StaticEditorFlags.OccluderStatic | StaticEditorFlags.OccludeeStatic | StaticEditorFlags.ReflectionProbeStatic;
+            StaticEditorFlags.BatchingStatic | StaticEditorFlags.OccluderStatic | StaticEditorFlags.OccludeeStatic | StaticEditorFlags.ReflectionProbeStatic | StaticEditorFlags.ContributeGI;
 
         public static Result Generate(GameAssets a, BuildingLayout layout, Transform parent = null)
         {
@@ -90,21 +90,34 @@ namespace Vent.Editor
 
                     Block(room, "Floor", center + Vector3.down * 0.1f, new Vector3(cell, 0.2f, cell), a.Floor);
                     Block(room, "Ceiling", center + Vector3.up * (h + 0.1f), new Vector3(cell, 0.2f, cell), a.Ceiling);
-                    Block(room, "LightPanel", center + Vector3.up * (h - 0.03f), new Vector3(1.6f, 0.06f, 1.6f), a.LightPanel, collider: false);
+                    // Ceiling panels in a grid that grows with the room: one per ~7.5 m of edge, so a 10 m
+                    // room has one and a 15 m room has four. A single point light in a big room leaves
+                    // dark corners and a hot centre; an office ceiling does not look like that.
+                    int panels = Mathf.Max(1, Mathf.RoundToInt(cell / 7.5f));
+                    float pitch = cell / panels;
+                    for (int pz = 0; pz < panels; pz++)
+                    {
+                        for (int px = 0; px < panels; px++)
+                        {
+                            Vector3 at = center + new Vector3((px - (panels - 1) / 2f) * pitch, 0f, (pz - (panels - 1) / 2f) * pitch);
+                            Block(room, $"LightPanel_{px}_{pz}", at + Vector3.up * (h - 0.03f), new Vector3(1.6f, 0.06f, 1.6f), a.LightPanel, collider: false);
 
-                    var lightGo = new GameObject($"Light_{c}_{r}");
-                    lightGo.transform.SetParent(lights, false);
-                    lightGo.transform.position = center + Vector3.up * (h - 0.5f);
-                    Light light = lightGo.AddComponent<Light>();
-                    light.type = LightType.Point;
-                    light.range = cell * 0.9f;
-                    light.intensity = 4.4f;
-                    light.color = new Color(1f, 0.93f, 0.8f);
-                    // No shadows: a point light is six shadow-atlas slices, and with 28 shadowed window
-                    // lights the atlas must always fit or URP re-picks shadow casters per frame — lights
-                    // that lose their shadow shine through walls, which reads as blinking.
-                    light.shadows = LightShadows.None;
-                    lightGo.layer = Layers.PlayerIndex; // see PrefabFactory: lights live on a layer both cameras cull in
+                            var lightGo = new GameObject($"Light_{c}_{r}_{px}_{pz}");
+                            lightGo.transform.SetParent(lights, false);
+                            lightGo.transform.position = at + Vector3.up * (h - 0.5f);
+                            Light light = lightGo.AddComponent<Light>();
+                            light.type = LightType.Point;
+                            light.range = pitch * 1.1f;
+                            light.intensity = 5.5f;
+                            light.color = new Color(1f, 0.93f, 0.8f);
+                            // No shadows: a point light is six shadow-atlas slices, and with 28 shadowed window
+                            // lights the atlas must always fit or URP re-picks shadow casters per frame — lights
+                            // that lose their shadow shine through walls, which reads as blinking.
+                            light.shadows = LightShadows.None;
+                            light.lightmapBakeType = LightmapBakeType.Mixed; // direct in real time, bounce baked (SceneBuilder bakes)
+                            lightGo.layer = Layers.PlayerIndex; // see PrefabFactory: lights live on a layer both cameras cull in
+                        }
+                    }
                 }
             }
 
@@ -233,6 +246,9 @@ namespace Vent.Editor
                 BuildExterior(result.Root.transform, a, rng, cols * cell, rows * cell, h);
             }
 
+            // ---- Probes: baked bounce light for movers, and per-room reflections -------------------
+            BuildProbes(result.Root.transform, result.RoomCenters, cell, h);
+
             // ---- Static flags & NavMesh --------------------------------------------------------------
             foreach (Transform child in geometry.GetComponentsInChildren<Transform>())
             {
@@ -316,11 +332,12 @@ namespace Vent.Editor
                 light.type = LightType.Spot;
                 light.spotAngle = 95f;
                 light.innerSpotAngle = 60f;
-                light.range = 12f; // across this room; the far wall's shadow stops it there
+                light.range = length * 1.2f; // across this room; the far wall's shadow stops it there
                 light.intensity = 16f; // a low sun through a window is bright; it falls off fast
                 light.color = new Color(1f, 0.72f, 0.48f); // dusk
                 light.shadows = LightShadows.Hard;
                 light.shadowStrength = 0.9f;
+                light.lightmapBakeType = LightmapBakeType.Mixed;
                 // Low tier (256 px): 28 of these fit the 2048 atlas with room to spare, so every window
                 // light is shadowed every frame — the shadow is what keeps it inside its room.
                 var tier = new SerializedObject(light.GetUniversalAdditionalLightData());
@@ -346,6 +363,18 @@ namespace Vent.Editor
         /// Ground, a sun on its own rendering layer (so it lights only the outside), a dusk skybox and a
         /// few distant building silhouettes. Default layer: not baked into the NavMesh, not shootable.
         /// </summary>
+        /// <summary>Clear street between the pavement apron and the nearest far building, metres.</summary>
+        public const float ExteriorGap = 6f;
+
+        /// <summary>Distance from a rectangle's centre to its edge along <paramref name="dir"/> (XZ).</summary>
+        public static float RectangleRadius(Vector3 dir, float halfWidth, float halfDepth)
+        {
+            float ax = Mathf.Abs(dir.x), az = Mathf.Abs(dir.z);
+            if (ax < 1e-4f) return halfDepth;
+            if (az < 1e-4f) return halfWidth;
+            return Mathf.Min(halfWidth / ax, halfDepth / az);
+        }
+
         private static void BuildExterior(Transform root, GameAssets a, System.Random rng, float width, float depth, float height)
         {
             Transform exterior = Child(root, "Exterior");
@@ -360,9 +389,14 @@ namespace Vent.Editor
             for (int i = 0; i < 14; i++)
             {
                 float angle = i * (360f / 14f) + (float)rng.NextDouble() * 15f;
-                float dist = 28f + (float)rng.NextDouble() * 45f;
-                Vector3 pos = Quaternion.Euler(0f, angle, 0f) * Vector3.forward * dist;
                 var size = new Vector3(8f + (float)rng.NextDouble() * 14f, 6f + (float)rng.NextDouble() * 22f, 8f + (float)rng.NextDouble() * 14f);
+                // Measured from the building's edge in this direction (not its centre), so a bigger
+                // building never ends up with a neighbour standing inside its rooms.
+                Vector3 dir = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
+                float edge = RectangleRadius(dir, width / 2f + 4f, depth / 2f + 4f);
+                float blockRadius = Mathf.Max(size.x, size.z) * 0.71f; // half-diagonal: it is rotated below
+                float dist = edge + blockRadius + ExteriorGap + (float)rng.NextDouble() * 45f;
+                Vector3 pos = dir * dist;
                 GameObject block = PrefabFactory.Primitive(PrimitiveType.Cube, $"Building{i}", exterior, pos + Vector3.up * (size.y / 2f - 0.2f), size, a.DistantBuilding, collider: false);
                 block.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
                 block.GetComponent<Renderer>().renderingLayerMask = exteriorRenderingLayer | 1u;
@@ -400,6 +434,54 @@ namespace Vent.Editor
             }
         }
 
+        /// <summary>
+        /// Light probes in a grid through every room (two heights, so a standing zombie and a toppled
+        /// one both pick up the right bounce), and one box-projected reflection probe per room that
+        /// sees only the Environment layer — never the sky, never the zombies.
+        /// </summary>
+        private static void BuildProbes(Transform root, List<Vector3> roomCenters, float cell, float height)
+        {
+            Transform probes = Child(root, "Probes");
+            var group = probes.gameObject.AddComponent<LightProbeGroup>();
+            var positions = new List<Vector3>();
+            int per = Mathf.Max(2, Mathf.RoundToInt(cell / 4f)); // ~4 m apart
+            foreach (Vector3 center in roomCenters)
+            {
+                for (int z = 0; z < per; z++)
+                {
+                    for (int x = 0; x < per; x++)
+                    {
+                        var at = new Vector3(
+                            center.x + (x - (per - 1) / 2f) * (cell * 0.8f / (per - 1)),
+                            0f,
+                            center.z + (z - (per - 1) / 2f) * (cell * 0.8f / (per - 1)));
+                        positions.Add(at + Vector3.up * 0.5f);
+                        positions.Add(at + Vector3.up * (height - 0.7f));
+                    }
+                }
+
+                var probeGo = new GameObject($"Reflection_{center.x:0}_{center.z:0}");
+                probeGo.transform.SetParent(probes, false);
+                probeGo.transform.position = center + Vector3.up * (height / 2f);
+                var probe = probeGo.AddComponent<ReflectionProbe>();
+                // Rendered once when the scene loads, on the player's GPU. A headless editor bake wrote
+                // garbage cubemaps (see SceneRendersTests, which guards against the magenta that caused).
+                probe.mode = ReflectionProbeMode.Realtime;
+                probe.refreshMode = ReflectionProbeRefreshMode.OnAwake;
+                probe.timeSlicingMode = ReflectionProbeTimeSlicingMode.IndividualFaces;
+                probe.size = new Vector3(cell, height, cell);
+                probe.boxProjection = true;
+                probe.resolution = 128;
+                probe.hdr = true;
+                probe.cullingMask = 1 << Layers.EnvironmentIndex;
+                probe.clearFlags = ReflectionProbeClearFlags.SolidColor;
+                probe.backgroundColor = new Color(0.02f, 0.02f, 0.025f);
+                probe.importance = 1;
+            }
+
+            group.probePositions = positions.ToArray();
+        }
+
         // ------------------------------------------------------------------ rooms
 
         public enum RoomType { Office, Conference, BreakRoom, Lobby, Storage, ServerRoom }
@@ -429,6 +511,8 @@ namespace Vent.Editor
             private readonly List<Vector3> doors, vents;
             private readonly Vector3 spawn;
             private readonly List<(Vector3 pos, float radius)> placed = new();
+            /// <summary>Floor area relative to the 10 m room the counts below were tuned for.</summary>
+            private readonly float area;
 
             public RoomDresser(GameAssets assets, System.Random random, Transform room, Vector3 roomCenter, float cellSize, float wallThickness,
                 List<Vector3> doorCenters, List<Vector3> ventLandings, Vector3 spawnCenter)
@@ -442,14 +526,18 @@ namespace Vent.Editor
                 doors = doorCenters;
                 vents = ventLandings;
                 spawn = spawnCenter;
+                area = (cellSize / 10f) * (cellSize / 10f);
             }
+
+            /// <summary>A count tuned for a 10 m room, scaled to this room's floor area.</summary>
+            private int Scaled(int count) => Mathf.Max(1, Mathf.RoundToInt(count * area));
 
             public void Dress(RoomType type)
             {
                 switch (type)
                 {
                     case RoomType.Office:
-                        int desks = 2 + rng.Next(2);
+                        int desks = Scaled(2) + rng.Next(2);
                         for (int i = 0; i < desks; i++)
                         {
                             float yaw = rng.Next(4) * 90f;
@@ -465,19 +553,28 @@ namespace Vent.Editor
                             }
                         }
 
-                        Wall(PropLibrary.Kind.FilingCabinet);
+                        for (int i = 0; i < Scaled(1); i++) Wall(PropLibrary.Kind.FilingCabinet);
                         if (rng.NextDouble() < 0.7) Wall(PropLibrary.Kind.FilingCabinet);
-                        if (rng.NextDouble() < 0.6) Wall(PropLibrary.Kind.Bookshelf);
+                        for (int i = 0; i < Scaled(1); i++) if (rng.NextDouble() < 0.6) Wall(PropLibrary.Kind.Bookshelf);
                         if (rng.NextDouble() < 0.5) Wall(PropLibrary.Kind.Whiteboard);
-                        if (rng.NextDouble() < 0.6) Free(PropLibrary.Kind.PottedPlant, Rand(rng, 0f, 360f));
-                        if (rng.NextDouble() < 0.4) Free(PropLibrary.Kind.CubicleWall, rng.Next(2) * 90f);
+                        for (int i = 0; i < Scaled(1); i++) if (rng.NextDouble() < 0.6) Free(PropLibrary.Kind.PottedPlant, Rand(rng, 0f, 360f));
+                        for (int i = 0; i < Scaled(1); i++) if (rng.NextDouble() < 0.4) Free(PropLibrary.Kind.CubicleWall, rng.Next(2) * 90f);
                         break;
 
                     case RoomType.Conference:
                         float tableYaw = rng.Next(2) * 90f;
-                        GameObject table = At(PropLibrary.Kind.ConferenceTable, center, tableYaw);
-                        if (table != null)
+                        // One table in a 10 m room; a bigger room seats a row of them along its axis.
+                        int tables = Scaled(1);
+                        Vector3 tableAxis = Quaternion.Euler(0f, tableYaw, 0f) * Vector3.forward;
+                        for (int n = 0; n < tables; n++)
                         {
+                            Vector3 tableAt = center + tableAxis * ((n - (tables - 1) / 2f) * 4.2f);
+                            GameObject table = At(PropLibrary.Kind.ConferenceTable, tableAt, tableYaw);
+                            if (table == null)
+                            {
+                                continue;
+                            }
+
                             for (int side = -1; side <= 1; side += 2)
                             {
                                 for (int i = -1; i <= 1; i++)
@@ -490,15 +587,18 @@ namespace Vent.Editor
 
                         Wall(PropLibrary.Kind.Whiteboard);
                         Wall(PropLibrary.Kind.WaterCooler);
-                        if (rng.NextDouble() < 0.7) Free(PropLibrary.Kind.PottedPlant, Rand(rng, 0f, 360f));
+                        for (int i = 0; i < Scaled(1); i++) if (rng.NextDouble() < 0.7) Free(PropLibrary.Kind.PottedPlant, Rand(rng, 0f, 360f));
+                        if (area > 1.5f) Wall(PropLibrary.Kind.Bookshelf);
                         break;
 
                     case RoomType.BreakRoom:
                         Wall(PropLibrary.Kind.VendingMachine);
                         Wall(PropLibrary.Kind.VendingMachine);
                         Wall(PropLibrary.Kind.WaterCooler);
-                        Wall(PropLibrary.Kind.Couch);
+                        for (int i = 0; i < Scaled(1); i++) Wall(PropLibrary.Kind.Couch);
                         Free(PropLibrary.Kind.TrashBin, 0f);
+                        for (int n = 0; n < Scaled(1); n++)
+                        {
                         GameObject cafe = Free(PropLibrary.Kind.ConferenceTable, rng.Next(2) * 90f);
                         if (cafe != null)
                         {
@@ -511,23 +611,25 @@ namespace Vent.Editor
                                 }
                             }
                         }
+                        }
 
-                        if (rng.NextDouble() < 0.6) Free(PropLibrary.Kind.PottedPlant, Rand(rng, 0f, 360f));
+                        for (int i = 0; i < Scaled(1); i++) if (rng.NextDouble() < 0.6) Free(PropLibrary.Kind.PottedPlant, Rand(rng, 0f, 360f));
                         break;
 
                     case RoomType.Lobby:
                         Wall(PropLibrary.Kind.ReceptionCounter);
-                        Wall(PropLibrary.Kind.Couch);
+                        for (int i = 0; i < Scaled(1); i++) Wall(PropLibrary.Kind.Couch);
                         if (rng.NextDouble() < 0.7) Wall(PropLibrary.Kind.Couch);
-                        Free(PropLibrary.Kind.PottedPlant, Rand(rng, 0f, 360f));
-                        Free(PropLibrary.Kind.PottedPlant, Rand(rng, 0f, 360f));
+                        for (int i = 0; i < Scaled(2); i++) Free(PropLibrary.Kind.PottedPlant, Rand(rng, 0f, 360f));
+                        for (int i = 0; i < Scaled(1); i++) Wall(PropLibrary.Kind.Bookshelf);
+                        if (area > 1.5f) Wall(PropLibrary.Kind.Whiteboard);
                         Wall(PropLibrary.Kind.TrashBin);
                         break;
 
                     case RoomType.Storage:
-                        int units = 3 + rng.Next(3);
+                        int units = Scaled(3) + rng.Next(3);
                         for (int i = 0; i < units; i++) Wall(PropLibrary.Kind.Shelving);
-                        if (rng.NextDouble() < 0.7) Free(PropLibrary.Kind.Shelving, rng.Next(2) * 90f);
+                        for (int i = 0; i < Scaled(1); i++) if (rng.NextDouble() < 0.7) Free(PropLibrary.Kind.Shelving, rng.Next(2) * 90f);
                         if (rng.NextDouble() < 0.5) Wall(PropLibrary.Kind.Copier);
                         break;
 
@@ -536,13 +638,18 @@ namespace Vent.Editor
                         float rowYaw = rng.Next(2) * 90f;
                         var rowAxis = Quaternion.Euler(0f, rowYaw, 0f) * Vector3.right;
                         var rowNormal = Quaternion.Euler(0f, rowYaw, 0f) * Vector3.forward;
-                        int perRow = 3 + rng.Next(2);
-                        for (int row = -1; row <= 1; row += 2)
+                        int perRow = Mathf.RoundToInt((3 + rng.Next(2)) * Mathf.Sqrt(area));
+                        int rowPairs = area > 1.5f ? 2 : 1; // a big room gets two aisles
+                        for (int pair = 0; pair < rowPairs; pair++)
                         {
-                            for (int i = 0; i < perRow; i++)
+                            float aisle = (pair - (rowPairs - 1) / 2f) * 4.6f;
+                            for (int row = -1; row <= 1; row += 2)
                             {
-                                Vector3 pos = center + rowAxis * ((i - (perRow - 1) / 2f) * 0.75f) + rowNormal * (row * 1.4f);
-                                At(PropLibrary.Kind.ServerRack, pos, rowYaw + (row > 0 ? 180f : 0f));
+                                for (int i = 0; i < perRow; i++)
+                                {
+                                    Vector3 pos = center + rowAxis * ((i - (perRow - 1) / 2f) * 0.75f) + rowNormal * (aisle + row * 1.4f);
+                                    At(PropLibrary.Kind.ServerRack, pos, rowYaw + (row > 0 ? 180f : 0f));
+                                }
                             }
                         }
 
@@ -669,6 +776,8 @@ namespace Vent.Editor
         private static GameObject Block(Transform parent, string name, Vector3 worldCenter, Vector3 size, Material material, bool collider = true)
         {
             GameObject go = PrefabFactory.Primitive(PrimitiveType.Cube, name, parent, Vector3.zero, size, material, collider);
+            // World-scale UVs: textures tile per metre on every block regardless of its size.
+            go.GetComponent<MeshFilter>().sharedMesh = MeshLibrary.WorldCube(size);
             go.transform.position = worldCenter;
             go.layer = Layers.EnvironmentIndex;
             return go;

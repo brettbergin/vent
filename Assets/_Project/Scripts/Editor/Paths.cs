@@ -8,6 +8,8 @@ namespace Vent.Editor
         public const string Events = Data + "/Events";
         public const string Materials = Root + "/Materials";
         public const string Prefabs = Root + "/Prefabs";
+        public const string Textures = Root + "/Textures";
+        public const string Meshes = Root + "/Meshes";
         public const string Scenes = Root + "/Scenes";
         public const string UI = Root + "/UI";
         public const string InputActions = Root + "/Scripts/Player/Input/PlayerInputActions.inputactions";
@@ -24,7 +26,7 @@ namespace Vent.Editor
 
         public static readonly string[] Folders =
         {
-            Data, Events, Materials, Prefabs, Scenes, UI,
+            Data, Events, Materials, Prefabs, Scenes, UI, Textures, Meshes,
         };
     }
 }

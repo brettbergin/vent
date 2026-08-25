@@ -5,6 +5,7 @@ using UnityEngine.AI;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using Vent.Core.Damage;
+using Vent.Core.Perks;
 using Vent.Core.Pooling;
 using Vent.Core.Utility;
 using Vent.Enemies.Runtime;
@@ -55,6 +56,7 @@ namespace Vent.Editor
 
             a.VentPrefab = CreateVent(a);
             a.PlayerPrefab = CreatePlayer(a);
+            a.PerkPickupPrefab = CreatePerkPickup(a);
         }
 
         // ------------------------------------------------------------------ VFX
@@ -540,12 +542,50 @@ namespace Vent.Editor
             inventory.KillChannel = a.Kill;
             inventory.HitChannel = a.Hit;
             inventory.NoiseChannel = a.Noise;
-            character.Configure(a.InputReader, cam, inventory, motion, a.Level);
+            character.Configure(a.InputReader, cam, inventory, motion, a.Level, a.PerkCollected);
 
             root.layer = Layers.PlayerIndex;
             pivot.layer = Layers.PlayerIndex;
             camGo.layer = Layers.PlayerIndex;
             weaponCamGo.layer = Layers.PlayerIndex;
+            return Save(root);
+        }
+
+        /// <summary>
+        /// A perk orb: a glowing sphere with a core and a flat ring, plus a point light, all tinted per
+        /// perk at runtime. No colliders: the pickup checks distance to the player itself, so the orb
+        /// never blocks a bullet or a zombie.
+        /// </summary>
+        private static GameObject CreatePerkPickup(GameAssets a)
+        {
+            var root = new GameObject("PerkPickup");
+            var pickup = root.AddComponent<PerkPickup>();
+
+            var visual = new GameObject("Visual");
+            visual.transform.SetParent(root.transform, false);
+            GameObject orb = Primitive(PrimitiveType.Sphere, "Orb", visual.transform, Vector3.zero, Vector3.one * 0.34f, a.PerkOrb, false);
+            GameObject core = Primitive(PrimitiveType.Sphere, "Core", visual.transform, Vector3.zero, Vector3.one * 0.16f, a.PerkOrb, false);
+            GameObject ring = Primitive(PrimitiveType.Cylinder, "Ring", visual.transform, Vector3.zero, new Vector3(0.7f, 0.012f, 0.7f), a.PerkOrb, false);
+            ring.transform.localRotation = Quaternion.Euler(20f, 0f, 0f);
+            var renderers = new List<Renderer>();
+            foreach (GameObject part in new[] { orb, core, ring })
+            {
+                var r = part.GetComponent<Renderer>();
+                r.shadowCastingMode = ShadowCastingMode.Off;
+                r.receiveShadows = false;
+                renderers.Add(r);
+            }
+
+            var glowGo = new GameObject("Glow");
+            glowGo.transform.SetParent(root.transform, false);
+            var glow = glowGo.AddComponent<Light>();
+            glow.type = LightType.Point;
+            glow.range = 4.5f;
+            glow.intensity = 3f;
+            glow.shadows = LightShadows.None;
+            glowGo.layer = Layers.PlayerIndex; // lights live on a layer both cameras cull in (see CreatePlayer)
+
+            pickup.Configure(a.PerkCollected, visual.transform, renderers.ToArray(), glow);
             return Save(root);
         }
 

@@ -139,5 +139,43 @@ namespace Vent.Tests.EditMode
                 EditorSceneManager.OpenScene($"{Vent.Editor.Paths.Scenes}/{SceneNames.Boot}.unity", OpenSceneMode.Single);
             }
         }
+        [Test]
+        public void FarBuildingsStayOutsideTheBuilding()
+        {
+            Scene scene = EditorSceneManager.OpenScene(Vent.Editor.Paths.BuildingScene, OpenSceneMode.Single);
+            try
+            {
+                // The building's footprint is the union of its floor slabs, plus the pavement apron.
+                var footprint = new Bounds();
+                bool any = false;
+                var blocks = new List<Renderer>();
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    foreach (Renderer r in root.GetComponentsInChildren<Renderer>(true))
+                    {
+                        if (r.name == "Floor")
+                        {
+                            if (!any) { footprint = r.bounds; any = true; } else footprint.Encapsulate(r.bounds);
+                        }
+                        else if (r.name.StartsWith("Building") && r.transform.parent != null && r.transform.parent.name == "Exterior")
+                        {
+                            blocks.Add(r);
+                        }
+                    }
+                }
+
+                Assert.IsTrue(any, "floor slabs found");
+                Assert.GreaterOrEqual(blocks.Count, 10, "a skyline outside the windows");
+                footprint.Expand(new Vector3(8f, 100f, 8f)); // the apron, and any height
+                foreach (Renderer block in blocks)
+                {
+                    Assert.IsFalse(footprint.Intersects(block.bounds), $"{block.name} stands inside the building or on its pavement");
+                }
+            }
+            finally
+            {
+                EditorSceneManager.OpenScene($"{Vent.Editor.Paths.Scenes}/{SceneNames.Boot}.unity", OpenSceneMode.Single);
+            }
+        }
     }
 }

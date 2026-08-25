@@ -15,6 +15,7 @@ using Vent.Core.Pooling;
 using Vent.Enemies.Spawning;
 using Vent.Gameplay.Flow;
 using Vent.Gameplay.Levels;
+using Vent.Gameplay.Perks;
 using Vent.Player;
 using Vent.UI;
 using Vent.UI.Screens;
@@ -88,7 +89,7 @@ namespace Vent.Editor
             ui.transform.SetParent(app.transform, false);
 
             HudScreen hud = Screen<HudScreen>(ui.transform, "HUD", a, "Hud.uxml", 0);
-            hud.Configure(a.Health, a.WeaponHud, a.WeaponLevelUp, a.Hit, a.Level, a.KillsThisLevel);
+            hud.Configure(a.Health, a.WeaponHud, a.WeaponLevelUp, a.Hit, a.Level, a.KillsThisLevel, a.PerkCollected);
             hud.ConfigureVisibility(a.GameState, GameState.Playing);
 
             MainMenuScreen menu = Screen<MainMenuScreen>(ui.transform, "MainMenu", a, "MainMenu.uxml", 5);
@@ -208,6 +209,7 @@ namespace Vent.Editor
             orbit.Configure(Vector3.up * 1.2f, 3.2f, 0.5f); // height is relative to the pivot
 
             Save(scene, Paths.MainMenuScene);
+            Bake(scene, Paths.MainMenuScene);
         }
 
         // ------------------------------------------------------------------ Building
@@ -222,13 +224,16 @@ namespace Vent.Editor
             var systems = new GameObject("Systems");
             systems.transform.position = building.PlayerSpawn; // pooled instances are parked here, on the NavMesh
             var pools = systems.AddComponent<PoolRegistry>();
-            SetPrewarm(pools, (a.ZombiePrefab, 12), (a.TracerPrefab, 24), (a.MuzzleFlashPrefab, 6), (a.ImpactPrefab, 24), (a.BloodImpactPrefab, 24), (a.ShellCasingPrefab, 40));
+            SetPrewarm(pools, (a.ZombiePrefab, 12), (a.TracerPrefab, 24), (a.MuzzleFlashPrefab, 6), (a.ImpactPrefab, 24), (a.BloodImpactPrefab, 24), (a.ShellCasingPrefab, 40), (a.PerkPickupPrefab, 4));
 
             var spawner = systems.AddComponent<ZombieSpawner>();
             spawner.Configure(a.Difficulty, a.Zombie, a.Zombies, a.Vents, a.Level);
 
             var director = systems.AddComponent<LevelDirector>();
             director.Configure(a.Difficulty, spawner, a.Kill, a.Level, a.KillsThisLevel);
+
+            var perks = systems.AddComponent<PerkSystem>();
+            perks.Configure(a.PerkDrops, a.PerkPickupPrefab, a.Zombies, a.Kill, a.PerkCollected, a.Level);
 
             var spawnGo = new GameObject("PlayerSpawn");
             spawnGo.transform.SetPositionAndRotation(building.PlayerSpawn, Quaternion.Euler(0f, building.PlayerYaw, 0f));
@@ -241,6 +246,7 @@ namespace Vent.Editor
             systems.AddComponent<BuildingSceneController>().Configure(director, spawnPoint, player);
 
             Save(scene, Paths.BuildingScene);
+            Bake(scene, Paths.BuildingScene);
         }
 
         private static void SetPrewarm(PoolRegistry registry, params (GameObject prefab, int count)[] entries)
@@ -350,8 +356,27 @@ namespace Vent.Editor
                 AssetDatabase.CreateAsset(settings, Paths.LightingSettings);
             }
 
-            settings.bakedGI = false;
+            // Baked indirect only: the lights stay real-time for direct light and shadows, the
+            // lightmaps and probes carry the bounce that fills corners. Tuned for a headless CPU bake
+            // in minutes, not hours: the geometry is boxes.
+            settings.bakedGI = true;
             settings.realtimeGI = false;
+            settings.lightmapper = LightingSettings.Lightmapper.ProgressiveCPU;
+            settings.mixedBakeMode = MixedLightingMode.IndirectOnly;
+            settings.lightmapResolution = 6f;
+            settings.lightmapPadding = 2;
+            settings.lightmapMaxSize = 2048;
+            settings.directSampleCount = 16;
+            settings.indirectSampleCount = 128;
+            settings.environmentSampleCount = 64;
+            settings.maxBounces = 2;
+            settings.ao = true;
+            settings.aoMaxDistance = 1.2f;
+            settings.aoExponentIndirect = 1f;
+            settings.aoExponentDirect = 0f;
+            settings.filteringMode = LightingSettings.FilterMode.Auto;
+            settings.lightmapCompression = LightmapCompression.NormalQuality;
+            settings.prioritizeView = false;
             EditorUtility.SetDirty(settings);
             return settings;
         }
@@ -362,6 +387,29 @@ namespace Vent.Editor
             {
                 throw new System.InvalidOperationException($"Failed to save scene {path}");
             }
+        }
+
+        /// <summary>Bake lightmaps, light probes and reflection probes for the open (saved) scene, then save the result.</summary>
+        private static void Bake(Scene scene, string path)
+        {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            Lightmapping.ClearLightingDataAsset();
+            if (!Lightmapping.Bake())
+            {
+                throw new System.InvalidOperationException($"Lighting bake failed for {path}");
+            }
+
+            Debug.Log($"[Vent] Baked lighting for {System.IO.Path.GetFileName(path)} in {clock.Elapsed.TotalSeconds:0}s");
+
+            // Reflection probes are realtime (rendered on load); the bake still writes cubemaps for them, and a
+            // headless editor cannot render probes correctly anyway. Drop the files so nothing can pick them up.
+            string lightingFolder = path.Substring(0, path.Length - ".unity".Length);
+            foreach (string guid in AssetDatabase.FindAssets("ReflectionProbe-", new[] { lightingFolder }))
+            {
+                AssetDatabase.DeleteAsset(AssetDatabase.GUIDToAssetPath(guid));
+            }
+
+            Save(scene, path);
         }
     }
 }
