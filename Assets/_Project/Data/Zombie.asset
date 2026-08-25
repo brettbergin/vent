@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0edd9dcb8eade48feb3e728375648eef, type: 3}
+  m_Name: Zombie
+  m_EditorClassIdentifier: Vent.Enemies::Vent.Enemies.Data.ZombieDefinition
+  baseHealth: 100
+  baseDamage: 12
+  baseSpeed: 3.4
+  baseExperience: 25
+  attackRange: 1.7
+  attackWindup: 0.45
+  attackCooldown: 1.1
+  attackArc: 60
+  emergeSeconds: 1.1
+  corpseSeconds: 2.5
+  repathInterval: 0.2
+  growlIntervalRange: {x: 3, y: 7}
+  prefab: {fileID: 4563921048441380806, guid: 14ea6e9f40ac5492aaec8950dcf54fa3, type: 3}

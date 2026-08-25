@@ -117,11 +117,36 @@ namespace Vent.Editor
             return go.AddComponent<T>();
         }
 
-        /// <summary>Point the UI input module at our own asset's UI map, using the importer's sub-asset references.</summary>
+        /// <summary>
+        /// Point the UI input module at our own asset's UI map, using the importer's sub-asset references.
+        /// The module's <c>actionsAsset</c> setter tries to re-create references for whatever it already
+        /// holds (the package defaults assigned by Reset), which throws for a freshly imported asset; so
+        /// clear its references first, swap the asset, then assign the persistent sub-asset references.
+        /// </summary>
         private static void WireUiActions(InputSystemUIInputModule module, InputActionAsset asset)
         {
             InputActionReference[] refs = AssetDatabase.LoadAllAssetsAtPath(Paths.InputActions).OfType<InputActionReference>().ToArray();
-            InputActionReference Find(string name) => refs.FirstOrDefault(r => r.action != null && r.action.actionMap.name == "UI" && r.action.name == name);
+            InputActionReference Find(string name)
+            {
+                InputActionReference found = refs.FirstOrDefault(r => r.action != null && r.action.actionMap.name == "UI" && r.action.name == name);
+                if (found == null)
+                {
+                    Debug.LogWarning($"[Vent] UI action '{name}' not found in {Paths.InputActions}; UI input for it will be inert.");
+                }
+
+                return found;
+            }
+
+            module.point = null;
+            module.leftClick = null;
+            module.rightClick = null;
+            module.middleClick = null;
+            module.scrollWheel = null;
+            module.move = null;
+            module.submit = null;
+            module.cancel = null;
+            module.trackedDevicePosition = null;
+            module.trackedDeviceOrientation = null;
 
             module.actionsAsset = asset;
             module.point = Find("Point");

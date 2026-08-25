@@ -5,7 +5,7 @@
     <ui:VisualElement class="panel">
       <ui:Label text="VENT" class="title" />
       <ui:Label text="THEY COME THROUGH THE DUCTS" class="subtitle" />
-      <ui:Label name="best-level" text="BEST LEVEL: —" class="label--small" style="margin-bottom: 12px; color: var(--muted);" />
+      <ui:Label name="best-level" text="BEST LEVEL: —" class="label--small" style="margin-bottom: 12px;" />
       <ui:Button name="play" text="PLAY" class="menu-button" />
       <ui:Button name="settings-toggle" text="SETTINGS" class="menu-button" />
       <ui:Button name="quit" text="QUIT" class="menu-button" />

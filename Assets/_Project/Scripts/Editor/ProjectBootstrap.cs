@@ -142,7 +142,18 @@ namespace Vent.Editor
             var scenes = new EditorBuildSettingsScene[SceneNames.BuildOrder.Length];
             for (int i = 0; i < scenes.Length; i++)
             {
-                scenes[i] = new EditorBuildSettingsScene($"{Paths.Scenes}/{SceneNames.BuildOrder[i]}.unity", true);
+                string path = $"{Paths.Scenes}/{SceneNames.BuildOrder[i]}.unity";
+                // A scene saved moments ago may not be imported yet; the GUID-based entry is what
+                // the editor and player use to resolve scenes by name, so make sure it exists.
+                if (System.IO.File.Exists(path))
+                {
+                    AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+                }
+
+                GUID guid = AssetDatabase.GUIDFromAssetPath(path);
+                scenes[i] = guid.Empty()
+                    ? new EditorBuildSettingsScene(path, true)
+                    : new EditorBuildSettingsScene(guid, true);
             }
 
             EditorBuildSettings.scenes = scenes;

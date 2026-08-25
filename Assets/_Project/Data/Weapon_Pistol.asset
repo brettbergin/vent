@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b356132f4a4bd413c88deccc845b0cb9, type: 3}
+  m_Name: Weapon_Pistol
+  m_EditorClassIdentifier: Vent.Weapons::Vent.Weapons.Data.WeaponDefinition
+  displayName: Pistol
+  slot: 1
+  fireMode: 1
+  damage: 38
+  roundsPerMinute: 400
+  range: 80
+  magazineSize: 12
+  startingReserve: 72
+  maxReserve: 120
+  reloadSeconds: 1.3
+  drawSeconds: 0.3
+  baseSpread: 0.35
+  movementSpread: 1.6
+  spreadPerShot: 0.6
+  maxBloom: 3
+  spreadRecovery: 11
+  aimSpreadScale: 0.3
+  verticalKickRange: {x: 1.2, y: 1.8}
+  horizontalKickRange: {x: -0.5, y: 0.5}
+  aimRecoilScale: 0.6
+  viewModelPrefab: {fileID: 2816582424759830626, guid: c6f492b6ee2b24522a8c149de16b43aa, type: 3}
+  muzzleFlashPrefab: {fileID: 2111603273721170620, guid: 6a31e3e25fdf44be8ae97bbe5320f3e0, type: 3}
+  tracerPrefab: {fileID: 1210805027730711437, guid: e4a0721089e10409cbb231762a62416a, type: 3}
+  impactPrefab: {fileID: 1319682971986768739, guid: 7729630bfdcab4718b55a81da7bd909f, type: 3}
+  bloodImpactPrefab: {fileID: 2261674778026480019, guid: 884f1cb4921ab4dee9ea066f451a5810, type: 3}
+  fireSound: 1
+  fireVolume: 0.8
+  levelCurve: {fileID: 11400000, guid: 2361e80b15382442caea5e4b62b456b7, type: 2}
