@@ -105,14 +105,25 @@ namespace Vent.Editor
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
+            // Reload PanelSettings from disk rather than trusting a.PanelSettings: reimporting the
+            // theme (.tss) between build phases destroys the cached instance, leaving that field a
+            // Unity "fake null". The UXML below is reloaded by path for the same reason. A document
+            // saved with a null PanelSettings renders nothing at runtime.
+            PanelSettings panel = AssetDatabase.LoadAssetAtPath<PanelSettings>(Paths.PanelSettings);
+            if (panel == null)
+            {
+                throw new System.InvalidOperationException($"PanelSettings not found at {Paths.PanelSettings}; run AssetFactory first.");
+            }
+
             var doc = go.AddComponent<UIDocument>();
-            doc.panelSettings = a.PanelSettings;
             doc.visualTreeAsset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>($"{Paths.UI}/{uxml}");
             doc.sortingOrder = order;
             if (doc.visualTreeAsset == null)
             {
                 throw new System.InvalidOperationException($"UXML not found: {Paths.UI}/{uxml}");
             }
+
+            PrefabFactory.SetPrivate(doc, "m_PanelSettings", panel);
 
             return go.AddComponent<T>();
         }
