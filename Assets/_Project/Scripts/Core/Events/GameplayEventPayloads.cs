@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace Vent.Core.Events
 {
-    // Domain-specific payloads live next to the channels that carry them. Keeping these in
+    // Domain-specific payloads for the gameplay channels (each channel class lives in its own file). Keeping these in
     // Core (rather than Enemies/Weapons) lets the UI and Gameplay assemblies depend on the
     // payload types without depending on the systems that produce them.
 
@@ -105,18 +105,4 @@ namespace Vent.Core.Events
         }
     }
 
-    [CreateAssetMenu(menuName = "Vent/Events/Kill Event", fileName = "Evt_Kill")]
-    public sealed class KillEventChannel : EventChannel<KillInfo> { }
-
-    [CreateAssetMenu(menuName = "Vent/Events/Level Event", fileName = "Evt_Level")]
-    public sealed class LevelEventChannel : EventChannel<LevelInfo> { }
-
-    [CreateAssetMenu(menuName = "Vent/Events/Health Event", fileName = "Evt_Health")]
-    public sealed class HealthEventChannel : EventChannel<HealthInfo> { }
-
-    [CreateAssetMenu(menuName = "Vent/Events/Weapon HUD Event", fileName = "Evt_WeaponHud")]
-    public sealed class WeaponHudEventChannel : EventChannel<WeaponHudInfo> { }
-
-    [CreateAssetMenu(menuName = "Vent/Events/Weapon Level Up Event", fileName = "Evt_WeaponLevelUp")]
-    public sealed class WeaponLevelUpEventChannel : EventChannel<WeaponLevelUpInfo> { }
 }

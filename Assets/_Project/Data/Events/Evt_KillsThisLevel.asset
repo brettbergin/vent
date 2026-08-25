@@ -9,7 +9,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 0}
+  m_Script: {fileID: 11500000, guid: f0d32ba1bd0914842a1f78c7d77441a6, type: 3}
   m_Name: Evt_KillsThisLevel
-  m_EditorClassIdentifier: Vent.Core:Vent.Core.Events:IntEventChannel
+  m_EditorClassIdentifier: Vent.Core::Vent.Core.Events.IntEventChannel
   description: Kills accumulated toward the next level.

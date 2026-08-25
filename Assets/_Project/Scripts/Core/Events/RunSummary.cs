@@ -23,9 +23,4 @@ namespace Vent.Core.Events
         }
     }
 
-    [CreateAssetMenu(menuName = "Vent/Events/Game State Event", fileName = "Evt_GameState")]
-    public sealed class GameStateEventChannel : EventChannel<GameState> { }
-
-    [CreateAssetMenu(menuName = "Vent/Events/Run Summary Event", fileName = "Evt_RunSummary")]
-    public sealed class RunSummaryEventChannel : EventChannel<RunSummary> { }
 }

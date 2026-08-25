@@ -9,7 +9,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 0}
+  m_Script: {fileID: 11500000, guid: 214d7483ff1a145f1841f324d34afe01, type: 3}
   m_Name: Evt_MenuRequested
-  m_EditorClassIdentifier: Vent.Core:Vent.Core.Events:VoidEventChannel
+  m_EditorClassIdentifier: Vent.Core::Vent.Core.Events.VoidEventChannel
   description: "UI \u2192 GameManager: back to the main menu."

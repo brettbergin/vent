@@ -63,7 +63,11 @@ namespace Vent.Tests.PlayMode
             Assert.AreEqual(GameState.Playing, manager.State, "Play request must start a run");
             Assert.AreEqual(SceneNames.Building, SceneManager.GetActiveScene().name);
             Assert.IsTrue(GameServices.TryGet(out BuildingSceneController building) && building.Director.IsRunning);
-            Assert.AreEqual(CursorLockMode.Locked, Cursor.lockState);
+            if (!Application.isBatchMode)
+            {
+                // A windowless (batch-mode) editor cannot lock the cursor; only check this with a real window.
+                Assert.AreEqual(CursorLockMode.Locked, Cursor.lockState);
+            }
 
             // Leave things tidy for the next test: back to the menu.
             Cursor.lockState = CursorLockMode.None;

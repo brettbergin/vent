@@ -154,10 +154,15 @@ namespace Vent.Tests.PlayMode
             Assert.Greater(required, 0);
 
             Weapon weapon = player.Inventory.Current;
-            var weaponField = weapon; // fire a few rounds so a refill is observable
-            weaponField.PullTrigger();
+            float ready = Time.time + 2f;
+            while (weapon.State != WeaponState.Ready && Time.time < ready)
+            {
+                yield return null; // the draw animation must finish before the trigger does anything
+            }
+
+            weapon.PullTrigger(); // fire a few rounds so a refill is observable
             yield return new WaitForSeconds(0.3f);
-            weaponField.ReleaseTrigger();
+            weapon.ReleaseTrigger();
             Assert.Less(weapon.Magazine, weapon.Stats.MagazineSize);
 
             for (int i = 0; i < required; i++)

@@ -9,7 +9,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 0}
+  m_Script: {fileID: 11500000, guid: 4bb5492f82a0742ebbb3b408be105a77, type: 3}
   m_Name: Evt_GameState
-  m_EditorClassIdentifier: Vent.Core:Vent.Core.Events:GameStateEventChannel
+  m_EditorClassIdentifier: Vent.Core::Vent.Core.Events.GameStateEventChannel
   description: Application state changed.
