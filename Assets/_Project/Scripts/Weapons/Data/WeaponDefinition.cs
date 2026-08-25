@@ -39,8 +39,16 @@ namespace Vent.Weapons.Data
         [SerializeField, Min(1)] private int magazineSize = 30;
         [SerializeField, Min(0)] private int startingReserve = 120;
         [SerializeField, Min(0)] private int maxReserve = 240;
-        [SerializeField, Min(0.1f)] private float reloadSeconds = 1.8f;
+        [SerializeField, Min(0.1f), Tooltip("Tactical reload (a round still chambered): swap the magazine.")]
+        private float reloadSeconds = 1.8f;
+        [SerializeField, Min(0.1f), Tooltip("Empty reload: swap the magazine, then rack the action.")]
+        private float emptyReloadSeconds = 2.4f;
         [SerializeField, Min(0.05f)] private float drawSeconds = 0.35f;
+
+        [Header("Damage falloff (metres)")]
+        [SerializeField, Min(0f)] private float falloffStart = 18f;
+        [SerializeField, Min(0f)] private float falloffEnd = 45f;
+        [SerializeField, Range(0.05f, 1f)] private float minDamageScale = 0.55f;
 
         [Header("Spread (degrees)")]
         [SerializeField, Min(0f)] private float baseSpread = 0.6f;
@@ -58,6 +66,12 @@ namespace Vent.Weapons.Data
         [SerializeField] private Vector2 verticalKickRange = new(0.6f, 1.0f);
         [SerializeField] private Vector2 horizontalKickRange = new(-0.35f, 0.35f);
         [SerializeField, Range(0.05f, 1f)] private float aimRecoilScale = 0.6f;
+        [SerializeField, Min(1), Tooltip("Shots of sustained fire over which recoil climbs to its maximum.")]
+        private int recoilRampShots = 8;
+        [SerializeField, Min(1f), Tooltip("Recoil multiplier once the ramp is complete.")]
+        private float recoilRampMultiplier = 1.8f;
+        [SerializeField, Min(0f), Tooltip("Seconds without firing before the ramp resets.")]
+        private float recoilRampReset = 0.3f;
 
         [Header("Presentation")]
         [SerializeField] private GameObject viewModelPrefab;
@@ -65,6 +79,8 @@ namespace Vent.Weapons.Data
         [SerializeField] private GameObject tracerPrefab;
         [SerializeField] private GameObject impactPrefab;
         [SerializeField] private GameObject bloodImpactPrefab;
+        [SerializeField] private GameObject shellCasingPrefab;
+        [SerializeField, Min(0.1f)] private float muzzleFlashScale = 1f;
         [SerializeField] private SoundId fireSound = SoundId.SmgShot;
         [SerializeField, Range(0f, 1f)] private float fireVolume = 0.8f;
 
@@ -81,7 +97,14 @@ namespace Vent.Weapons.Data
         public int StartingReserve => startingReserve;
         public int MaxReserve => maxReserve;
         public float ReloadSeconds => reloadSeconds;
+        public float EmptyReloadSeconds => Mathf.Max(reloadSeconds, emptyReloadSeconds);
         public float DrawSeconds => drawSeconds;
+        public float FalloffStart => falloffStart;
+        public float FalloffEnd => falloffEnd;
+        public float MinDamageScale => minDamageScale;
+        public int RecoilRampShots => recoilRampShots;
+        public float RecoilRampMultiplier => recoilRampMultiplier;
+        public float RecoilRampReset => recoilRampReset;
         public float BaseSpread => baseSpread;
         public float MovementSpread => movementSpread;
         public float SpreadPerShot => spreadPerShot;
@@ -96,6 +119,8 @@ namespace Vent.Weapons.Data
         public GameObject TracerPrefab => tracerPrefab;
         public GameObject ImpactPrefab => impactPrefab;
         public GameObject BloodImpactPrefab => bloodImpactPrefab;
+        public GameObject ShellCasingPrefab => shellCasingPrefab;
+        public float MuzzleFlashScale => muzzleFlashScale;
         public SoundId FireSound => fireSound;
         public float FireVolume => fireVolume;
         public WeaponLevelCurve LevelCurve => levelCurve;
@@ -133,13 +158,28 @@ namespace Vent.Weapons.Data
             range = weaponRange;
         }
 
-        public void SetPresentation(GameObject viewModel, GameObject muzzleFlash, GameObject tracer, GameObject impact, GameObject bloodImpact)
+        /// <summary>Handling feel: reload timing, falloff, recoil climb, flash size. Editor factory only.</summary>
+        public void ConfigureHandling(float emptyReload, float falloffStartMetres, float falloffEndMetres, float minDamage,
+            int rampShots, float rampMultiplier, float flashScale)
+        {
+            emptyReloadSeconds = emptyReload;
+            falloffStart = falloffStartMetres;
+            falloffEnd = falloffEndMetres;
+            minDamageScale = minDamage;
+            recoilRampShots = rampShots;
+            recoilRampMultiplier = rampMultiplier;
+            muzzleFlashScale = flashScale;
+        }
+
+        public void SetPresentation(GameObject viewModel, GameObject muzzleFlash, GameObject tracer, GameObject impact, GameObject bloodImpact,
+            GameObject shellCasing = null)
         {
             viewModelPrefab = viewModel;
             muzzleFlashPrefab = muzzleFlash;
             tracerPrefab = tracer;
             impactPrefab = impact;
             bloodImpactPrefab = bloodImpact;
+            shellCasingPrefab = shellCasing;
         }
     }
 }

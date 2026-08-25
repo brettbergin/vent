@@ -23,6 +23,11 @@ namespace Vent.Player.Camera
         [SerializeField, Min(0f)] private float landDipAmount = 0.08f;
         [SerializeField, Min(0f)] private float landRecoverySharpness = 10f;
 
+        [Header("Aim")]
+        [SerializeField, Min(1f), Tooltip("Degrees of FOV removed while aiming down sights.")]
+        private float aimZoomDegrees = 12f;
+        [SerializeField, Min(0f)] private float aimZoomSharpness = 12f;
+
         [Header("Shake")]
         [SerializeField, Min(0f)] private float shakeDecaySharpness = 8f;
         [SerializeField, Min(0f)] private float shakeFrequency = 28f;
@@ -33,6 +38,9 @@ namespace Vent.Player.Camera
         private float shakeAmplitude;
         private bool wasGrounded = true;
         private float lastVerticalVelocity;
+        private UnityEngine.Camera cam;
+        private float restFov;
+        private bool aiming;
 
         public FirstPersonController Controller
         {
@@ -40,7 +48,15 @@ namespace Vent.Player.Camera
             set => controller = value;
         }
 
-        private void Awake() => restLocalPosition = transform.localPosition;
+        private void Awake()
+        {
+            restLocalPosition = transform.localPosition;
+            cam = GetComponent<UnityEngine.Camera>();
+            restFov = cam != null ? cam.fieldOfView : 70f;
+        }
+
+        /// <summary>Aiming down sights narrows the field of view a little; the weapon view-model moves in step.</summary>
+        public void SetAiming(bool value) => aiming = value;
 
         /// <summary>Kick off a shake (damage, nearby explosion). Amplitude in metres.</summary>
         public void Shake(float amplitude) => shakeAmplitude = Mathf.Max(shakeAmplitude, amplitude);
@@ -53,6 +69,11 @@ namespace Vent.Player.Camera
             }
 
             float dt = Time.deltaTime;
+
+            if (cam != null)
+            {
+                cam.fieldOfView = MathUtil.Damp(cam.fieldOfView, aiming ? restFov - aimZoomDegrees : restFov, aimZoomSharpness, dt);
+            }
             float speed01 = controller.Speed01;
             bool grounded = controller.IsGrounded;
 

@@ -31,6 +31,7 @@ namespace Vent.Weapons.Runtime
         [SerializeField] private WeaponLevelUpEventChannel levelUpChannel;
         [SerializeField] private KillEventChannel killChannel;
         [SerializeField] private BoolEventChannel hitChannel;
+        [SerializeField] private NoiseEventChannel noiseChannel;
 
         private readonly List<Weapon> weapons = new(SlotCount);
         private WeaponContext context;
@@ -82,6 +83,12 @@ namespace Vent.Weapons.Runtime
             set => hitChannel = value;
         }
 
+        public NoiseEventChannel NoiseChannel
+        {
+            get => noiseChannel;
+            set => noiseChannel = value;
+        }
+
         /// <summary>Build the weapons. Called once by the holder (the player) during its Awake.</summary>
         public void Initialize(IWeaponHolder holder, IRecoilReceiver recoil)
         {
@@ -100,6 +107,7 @@ namespace Vent.Weapons.Runtime
                 HudChannel = hudChannel,
                 LevelUpChannel = levelUpChannel,
                 HitChannel = hitChannel,
+                NoiseChannel = noiseChannel,
             };
 
             foreach (WeaponDefinition def in new[] { primary, secondary })

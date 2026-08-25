@@ -30,6 +30,10 @@ namespace Vent.Weapons.Runtime
     /// perturbed by the current spread cone. Hits resolve through <see cref="Hitbox"/> so
     /// headshot multipliers apply without the weapon knowing anything about zombies.
     ///
+    /// Handling details a real gun has: a tactical reload keeps the chambered round (+1), an empty
+    /// reload is slower and ends with racking the action, recoil climbs under sustained fire and
+    /// damage falls off with distance. The arithmetic lives in <see cref="Ballistics"/>.
+    ///
     /// The state machine is a plain enum + switch: with four states and two timers, classes
     /// per state would obscure more than they clarify.
     /// </summary>
@@ -56,6 +60,11 @@ namespace Vent.Weapons.Runtime
         private WeaponViewModel viewModel;
         private Cooldown fireCooldown;
         private float stateTimer;
+        private float stateDuration;
+        private bool reloadFromEmpty;
+        private int reloadPhase;
+        private int consecutiveShots;
+        private float lastShotTime = float.NegativeInfinity;
         private float bloom;
         private bool triggerHeld;
         private bool triggerPulled;
@@ -89,7 +98,7 @@ namespace Vent.Weapons.Runtime
             Progression.LevelUp += OnLevelUp;
 
             RecomputeStats();
-            Magazine = Stats.MagazineSize;
+            Magazine = Stats.MagazineSize + 1; // one chambered
             Reserve = definition.StartingReserve;
 
             if (definition.ViewModelPrefab != null)
@@ -174,17 +183,23 @@ namespace Vent.Weapons.Runtime
             }
         }
 
+        /// <summary>Rounds the gun holds when topped up: the magazine plus one chambered.</summary>
+        public int Capacity => Stats.MagazineSize + 1;
+
         public bool TryReload()
         {
-            if (State != WeaponState.Ready || Reserve <= 0 || Magazine >= Stats.MagazineSize)
+            if (State != WeaponState.Ready || Reserve <= 0 || Magazine >= Capacity)
             {
                 return false;
             }
 
+            reloadFromEmpty = Magazine == 0;
+            reloadPhase = 0;
+            stateDuration = reloadFromEmpty ? Stats.EmptyReloadSeconds : Stats.ReloadSeconds;
             State = WeaponState.Reloading;
-            stateTimer = Stats.ReloadSeconds;
-            viewModel?.PlayReload(Stats.ReloadSeconds);
-            ctx.Sfx?.Play2D(SoundId.ReloadStart, 0.7f);
+            stateTimer = stateDuration;
+            viewModel?.PlayReload(stateDuration, reloadFromEmpty);
+            ctx.Sfx?.Play2D(SoundId.ReloadStart, 0.7f); // magazine out
             PublishHud();
             return true;
         }
@@ -192,13 +207,14 @@ namespace Vent.Weapons.Runtime
         /// <summary>Top up magazine and reserve to their maximums (level transitions).</summary>
         public void RefillAmmo()
         {
-            Magazine = Stats.MagazineSize;
+            Magazine = Capacity;
             Reserve = Definition.MaxReserve;
             if (State == WeaponState.Reloading)
             {
                 State = WeaponState.Ready;
             }
 
+            viewModel?.SetChambered(true);
             PublishHud();
         }
 
@@ -212,9 +228,11 @@ namespace Vent.Weapons.Runtime
         {
             Progression.Reset();
             RecomputeStats();
-            Magazine = Stats.MagazineSize;
+            Magazine = Capacity;
             Reserve = Definition.StartingReserve;
             bloom = 0f;
+            consecutiveShots = 0;
+            viewModel?.SetChambered(true);
             ShotsFired = 0;
             ShotsHit = 0;
             fireCooldown.Reset();
@@ -265,6 +283,7 @@ namespace Vent.Weapons.Runtime
 
                 case WeaponState.Reloading:
                     stateTimer -= dt;
+                    TickReloadPhases(1f - stateTimer / Mathf.Max(0.01f, stateDuration));
                     if (stateTimer <= 0f)
                     {
                         CompleteReload();
@@ -310,14 +329,32 @@ namespace Vent.Weapons.Runtime
             }
         }
 
+        /// <summary>Sounds keyed to the reload animation: mag in near the middle, rack near the end if it was empty.</summary>
+        private void TickReloadPhases(float progress)
+        {
+            if (reloadPhase == 0 && progress >= WeaponViewModel.ReloadMagInAt)
+            {
+                reloadPhase = 1;
+                ctx.Sfx?.Play2D(SoundId.ReloadMagIn, 0.7f);
+            }
+
+            if (reloadPhase == 1 && reloadFromEmpty && progress >= WeaponViewModel.ReloadRackAt)
+            {
+                reloadPhase = 2;
+                ctx.Sfx?.Play2D(SoundId.ReloadRack, 0.8f);
+            }
+        }
+
         private void CompleteReload()
         {
-            int needed = Stats.MagazineSize - Magazine;
+            int target = Ballistics.RoundsAfterReload(Stats.MagazineSize, hadRoundChambered: !reloadFromEmpty);
+            int needed = Mathf.Max(0, target - Magazine);
             int taken = Mathf.Min(needed, Reserve);
             Magazine += taken;
             Reserve -= taken;
             State = WeaponState.Ready;
-            ctx.Sfx?.Play2D(SoundId.ReloadEnd, 0.7f);
+            viewModel?.SetChambered(Magazine > 0);
+            ctx.Sfx?.Play2D(SoundId.ReloadEnd, 0.6f);
             PublishHud();
         }
 
@@ -325,17 +362,23 @@ namespace Vent.Weapons.Runtime
 
         private void Fire()
         {
+            float now = Time.time;
             Magazine--;
             ShotsFired++;
             bloom = Mathf.Min(bloom + Definition.SpreadPerShot, Definition.MaxBloom);
 
+            // Sustained fire climbs: each consecutive shot kicks harder until the ramp tops out.
+            consecutiveShots = now - lastShotTime <= Stats.SecondsBetweenShots + Definition.RecoilRampReset ? consecutiveShots + 1 : 1;
+            lastShotTime = now;
+            float ramp = Ballistics.RecoilRamp(consecutiveShots, Definition.RecoilRampShots, Definition.RecoilRampMultiplier);
+
             // Recoil: the view kicks up and slightly sideways; aiming steadies it.
-            float recoilScale = aiming ? Definition.AimRecoilScale : 1f;
+            float recoilScale = (aiming ? Definition.AimRecoilScale : 1f) * ramp;
             var kick = new Vector2(
                 Random.Range(Definition.VerticalKickRange.x, Definition.VerticalKickRange.y),
                 Random.Range(Definition.HorizontalKickRange.x, Definition.HorizontalKickRange.y)) * recoilScale;
             ctx.Recoil?.AddRecoil(kick);
-            viewModel?.Kick();
+            viewModel?.OnShot(ramp, Magazine == 0);
 
             // Hitscan.
             Ray aim = ctx.Holder?.AimRay ?? new Ray(transform.position, transform.forward);
@@ -352,7 +395,13 @@ namespace Vent.Weapons.Runtime
 
             SpawnMuzzleFlash();
             SpawnTracer(endPoint);
+            SpawnShellCasing();
             ctx.Sfx?.Play2D(Definition.FireSound, Definition.FireVolume);
+            ctx.NoiseChannel?.Raise(new NoiseInfo(aim.origin));
+            if (Magazine == 0)
+            {
+                ctx.Sfx?.Play2D(SoundId.SlideLock, 0.5f);
+            }
 
             if (hitSomething)
             {
@@ -367,9 +416,10 @@ namespace Vent.Weapons.Runtime
         {
             if (Hitbox.TryResolve(hit.collider, out Hitbox hitbox, out IDamageable damageable) && damageable.IsAlive)
             {
-                var info = new DamageInfo(Stats.Damage, DamageKind.Bullet, this, hit.point, hit.normal, direction);
+                float damage = Stats.Damage * Ballistics.DamageScale(hit.distance, Definition.FalloffStart, Definition.FalloffEnd, Definition.MinDamageScale);
+                var info = new DamageInfo(damage, DamageKind.Bullet, this, hit.point, hit.normal, direction);
                 DamageResult result = hitbox != null
-                    ? hitbox.Hit(info.WithAmount(Stats.Damage, false))
+                    ? hitbox.Hit(info.WithAmount(damage, false))
                     : damageable.ApplyDamage(info);
 
                 if (!result.Ignored)
@@ -396,7 +446,19 @@ namespace Vent.Weapons.Runtime
 
             Transform muzzle = viewModel != null ? viewModel.Muzzle : transform;
             var flash = ctx.Pools.Spawn<MuzzleFlash>(Definition.MuzzleFlashPrefab, muzzle.position, muzzle.rotation);
-            flash?.Play(muzzle);
+            flash?.Play(muzzle, Definition.MuzzleFlashScale);
+        }
+
+        private void SpawnShellCasing()
+        {
+            if (Definition.ShellCasingPrefab == null || ctx.Pools == null || viewModel == null)
+            {
+                return;
+            }
+
+            Transform port = viewModel.EjectionPort;
+            var shell = ctx.Pools.Spawn<ShellCasing>(Definition.ShellCasingPrefab, port.position, port.rotation);
+            shell?.Eject(port.right, port.up);
         }
 
         private void SpawnTracer(Vector3 endPoint)
@@ -429,7 +491,8 @@ namespace Vent.Weapons.Runtime
             RecomputeStats();
 
             // A level-up tops the magazine up: immediate, tangible reward.
-            Magazine = Stats.MagazineSize;
+            Magazine = Capacity;
+            viewModel?.SetChambered(true);
             Reserve = Mathf.Min(Definition.MaxReserve, Reserve + (Stats.MagazineSize - previousMagazine));
 
             ctx.LevelUpChannel?.Raise(new WeaponLevelUpInfo(Definition.DisplayName, newLevel));

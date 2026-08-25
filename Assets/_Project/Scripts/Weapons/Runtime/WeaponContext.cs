@@ -22,6 +22,8 @@ namespace Vent.Weapons.Runtime
         public WeaponLevelUpEventChannel LevelUpChannel;
         /// <summary>Raised on every damaging hit; payload = headshot. Drives the HUD hit marker.</summary>
         public BoolEventChannel HitChannel;
+        /// <summary>Raised on every shot so nearby zombies can hear it.</summary>
+        public NoiseEventChannel NoiseChannel;
 
         private PoolRegistry pools;
         private SfxPlayer sfx;

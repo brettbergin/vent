@@ -161,6 +161,8 @@ namespace Vent.Player
             {
                 look.SetAiming(IsAiming);
             }
+
+            cameraMotion?.SetAiming(IsAiming);
         }
 
         /// <summary>Enable or disable all player control (used by menus, death and level transitions).</summary>

@@ -13,6 +13,7 @@ namespace Vent.Weapons.Data
         public readonly float SecondsBetweenShots;
         public readonly int MagazineSize;
         public readonly float ReloadSeconds;
+        public readonly float EmptyReloadSeconds;
         public readonly float SpreadScale;
 
         public WeaponStats(WeaponDefinition def, in WeaponLevelModifiers mods)
@@ -22,6 +23,7 @@ namespace Vent.Weapons.Data
             SecondsBetweenShots = 60f / Mathf.Max(1f, RoundsPerMinute);
             MagazineSize = Mathf.Max(1, Mathf.RoundToInt(def.MagazineSize * mods.MagazineMultiplier));
             ReloadSeconds = def.ReloadSeconds / Mathf.Max(0.01f, mods.ReloadSpeedMultiplier);
+            EmptyReloadSeconds = def.EmptyReloadSeconds / Mathf.Max(0.01f, mods.ReloadSpeedMultiplier);
             SpreadScale = mods.SpreadMultiplier;
         }
     }

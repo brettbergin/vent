@@ -29,5 +29,8 @@ namespace Vent.Core.Audio
         Footstep,
         UiClick,
         UiConfirm,
+        ReloadMagIn,
+        ReloadRack,
+        SlideLock,
     }
 }

@@ -20,13 +20,15 @@ namespace Vent.Weapons.VFX
 
         private void Awake() => pooled = GetComponent<PooledObject>();
 
-        public void Play(Transform muzzle)
+        private float scale = 1f;
+
+        public void Play(Transform muzzle, float weaponScale = 1f)
         {
             spawnedAt = Time.time;
             transform.SetParent(muzzle, worldPositionStays: false);
             transform.localPosition = Vector3.zero;
             transform.localRotation = Quaternion.Euler(0f, 0f, Random.Range(0f, 360f));
-            float scale = Random.Range(0.8f, 1.2f);
+            scale = weaponScale * Random.Range(0.8f, 1.2f);
             if (visual != null)
             {
                 visual.localScale = Vector3.one * scale;
@@ -34,7 +36,7 @@ namespace Vent.Weapons.VFX
 
             if (flashLight != null)
             {
-                flashLight.intensity = lightIntensity;
+                flashLight.intensity = lightIntensity * Mathf.Sqrt(weaponScale);
             }
         }
 
@@ -49,7 +51,7 @@ namespace Vent.Weapons.VFX
 
             if (flashLight != null)
             {
-                flashLight.intensity = lightIntensity * (1f - t);
+                flashLight.intensity = lightIntensity * Mathf.Sqrt(scale) * (1f - t);
             }
         }
     }

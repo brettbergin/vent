@@ -56,20 +56,35 @@ namespace Vent.Core.Audio
             var rng = new System.Random((int)id * 7919 + 13);
             switch (id)
             {
+                // Gunshots are three layers: a hard high crack (the report), a low thump (the
+                // pressure wave against the chest) and a longer, darker tail (the room answering).
                 case SoundId.PistolShot:
                     return Mix(
-                        Lowpass(NoiseBurst(rng, 0.22f, 26f), 5000f),
-                        Tone(0.18f, 90f, 40f, 30f, 0.7f));
+                        Highpass(NoiseBurst(rng, 0.03f, 160f), 2500f, 0.9f),
+                        Lowpass(NoiseBurst(rng, 0.16f, 34f), 4200f),
+                        Tone(0.2f, 110f, 38f, 26f, 0.8f),
+                        Lowpass(NoiseBurst(rng, 0.42f, 9f, 0.35f), 900f));
                 case SoundId.SmgShot:
                     return Mix(
-                        Lowpass(NoiseBurst(rng, 0.14f, 40f), 6500f),
-                        Tone(0.12f, 120f, 50f, 45f, 0.5f));
+                        Highpass(NoiseBurst(rng, 0.025f, 200f), 3000f, 0.8f),
+                        Lowpass(NoiseBurst(rng, 0.11f, 48f), 5200f),
+                        Tone(0.13f, 140f, 55f, 40f, 0.55f),
+                        Lowpass(NoiseBurst(rng, 0.3f, 12f, 0.3f), 1000f));
                 case SoundId.DryFire:
                     return Highpass(NoiseBurst(rng, 0.035f, 120f), 2500f, 0.6f);
                 case SoundId.ReloadStart:
                     return Mix(Highpass(NoiseBurst(rng, 0.05f, 90f), 1800f, 0.5f), Tone(0.06f, 1400f, 900f, 60f, 0.25f));
+                case SoundId.ReloadMagIn:
+                    // Magazine seating: a firm plastic-on-metal clack with a short body.
+                    return Mix(Lowpass(NoiseBurst(rng, 0.05f, 110f), 2600f, 0.8f), Tone(0.07f, 520f, 300f, 60f, 0.4f));
+                case SoundId.ReloadRack:
+                    // Slide/bolt release: a bright metallic snap followed by the action slamming home.
+                    return Mix(Highpass(NoiseBurst(rng, 0.03f, 140f), 3200f, 0.6f), Tone(0.04f, 1900f, 1200f, 90f, 0.3f),
+                        Lowpass(NoiseBurst(rng, 0.09f, 60f), 1800f, 0.7f), Tone(0.1f, 300f, 180f, 45f, 0.45f));
+                case SoundId.SlideLock:
+                    return Mix(Highpass(NoiseBurst(rng, 0.03f, 150f), 2800f, 0.4f), Tone(0.05f, 1500f, 1100f, 80f, 0.25f));
                 case SoundId.ReloadEnd:
-                    return Mix(Lowpass(NoiseBurst(rng, 0.07f, 70f), 3000f, 0.7f), Tone(0.08f, 700f, 400f, 50f, 0.35f));
+                    return Mix(Lowpass(NoiseBurst(rng, 0.06f, 80f), 3000f, 0.5f), Tone(0.06f, 700f, 450f, 60f, 0.25f));
                 case SoundId.WeaponDraw:
                     return Lowpass(NoiseBurst(rng, 0.12f, 30f), 2200f, 0.35f);
                 case SoundId.HitMarker:
