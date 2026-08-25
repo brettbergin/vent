@@ -1,4 +1,5 @@
-using System.Collections;
+using System;
+using System.Threading;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using Vent.Core;
@@ -47,7 +48,8 @@ namespace Vent.Gameplay.Flow
         private static GameManager instance;
 
         private HighScoreStore scores;
-        private Coroutine transition;
+        /// <summary>Non-null while a transition is in flight; cancelling it aborts the transition.</summary>
+        private CancellationTokenSource transition;
 
         public GameState State { get; private set; } = GameState.Boot;
         public HighScoreStore Scores => scores;
@@ -125,7 +127,7 @@ namespace Vent.Gameplay.Flow
             ApplySettings();
             ProceduralSoundBank.WarmUp();
             SetState(GameState.Boot);
-            BeginTransition(LoadMenuRoutine());
+            BeginTransition(LoadMenuAsync);
         }
 
         // ------------------------------------------------------------------ requests
@@ -134,7 +136,7 @@ namespace Vent.Gameplay.Flow
         {
             if (State == GameState.MainMenu)
             {
-                BeginTransition(StartRunRoutine());
+                BeginTransition(StartRunAsync);
             }
         }
 
@@ -142,7 +144,7 @@ namespace Vent.Gameplay.Flow
         {
             if (State == GameState.GameOver || State == GameState.Paused)
             {
-                BeginTransition(StartRunRoutine());
+                BeginTransition(StartRunAsync);
             }
         }
 
@@ -150,7 +152,7 @@ namespace Vent.Gameplay.Flow
         {
             if (State == GameState.Paused || State == GameState.GameOver)
             {
-                BeginTransition(LoadMenuRoutine());
+                BeginTransition(LoadMenuAsync);
             }
         }
 
@@ -183,7 +185,7 @@ namespace Vent.Gameplay.Flow
         {
             if (State == GameState.Playing)
             {
-                BeginTransition(GameOverRoutine());
+                BeginTransition(GameOverAsync);
             }
         }
 
@@ -197,47 +199,78 @@ namespace Vent.Gameplay.Flow
         }
 
         // ------------------------------------------------------------------ transitions
+        //
+        // Transitions are Unity 6 Awaitables rather than coroutines: each one runs under a
+        // CancellationTokenSource linked to destroyCancellationToken, so starting a new transition
+        // (or destroying the manager) cancels the old one at its next await, and the "is anything in
+        // flight" question is just `transition != null`.
 
-        private void BeginTransition(IEnumerator routine)
+        private void BeginTransition(Func<CancellationToken, Awaitable> run)
         {
-            if (transition != null)
-            {
-                StopCoroutine(transition);
-            }
-
-            transition = StartCoroutine(routine);
+            CancelTransition();
+            var cts = CancellationTokenSource.CreateLinkedTokenSource(destroyCancellationToken);
+            transition = cts;
+            RunTransition(run, cts);
         }
 
-        private IEnumerator LoadMenuRoutine()
+        private async void RunTransition(Func<CancellationToken, Awaitable> run, CancellationTokenSource cts)
+        {
+            try
+            {
+                await run(cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // Superseded by a newer transition, or the manager is being destroyed.
+            }
+            finally
+            {
+                if (transition == cts)
+                {
+                    transition = null;
+                }
+
+                cts.Dispose();
+            }
+        }
+
+        private void CancelTransition()
+        {
+            CancellationTokenSource current = transition;
+            transition = null;
+            current?.Cancel();
+        }
+
+        private void OnDestroy() => CancelTransition();
+
+        private async Awaitable LoadMenuAsync(CancellationToken ct)
         {
             Time.timeScale = 1f;
             input?.DisableAll();
-            yield return SceneManager.LoadSceneAsync(SceneNames.MainMenu, LoadSceneMode.Single);
+            await Awaitable.FromAsyncOperation(SceneManager.LoadSceneAsync(SceneNames.MainMenu, LoadSceneMode.Single), ct);
             bestLevelChanged?.Raise(scores.Data.BestLevel);
             SetState(GameState.MainMenu);
-            transition = null;
         }
 
-        private IEnumerator StartRunRoutine()
+        private async Awaitable StartRunAsync(CancellationToken ct)
         {
             Time.timeScale = 1f;
             input?.DisableAll();
-            yield return SceneManager.LoadSceneAsync(SceneNames.Building, LoadSceneMode.Single);
-            yield return null; // let Awake/OnEnable in the new scene register services
+            await Awaitable.FromAsyncOperation(SceneManager.LoadSceneAsync(SceneNames.Building, LoadSceneMode.Single), ct);
+            await Awaitable.NextFrameAsync(ct); // let Awake/OnEnable in the new scene register services
 
             if (!GameServices.TryGet(out BuildingSceneController building))
             {
                 Debug.LogError("GameManager: Building scene has no BuildingSceneController.");
-                yield return LoadMenuRoutine();
-                yield break;
+                await LoadMenuAsync(ct);
+                return;
             }
 
             SetState(GameState.Playing);
             building.BeginRun();
-            transition = null;
         }
 
-        private IEnumerator GameOverRoutine()
+        private async Awaitable GameOverAsync(CancellationToken ct)
         {
             if (GameServices.TryGet(out BuildingSceneController building))
             {
@@ -245,12 +278,13 @@ namespace Vent.Gameplay.Flow
             }
 
             SfxPlayer.TryPlay2D(SoundId.PlayerDeath, 0.9f);
-            yield return new WaitForSecondsRealtime(deathToGameOverDelay);
+            // Scaled time is fine here: the state stays Playing (timeScale 1) and Pause is refused while
+            // a transition is in flight.
+            await Awaitable.WaitForSecondsAsync(deathToGameOverDelay, ct);
 
             RunSummary summary = BuildSummary(building);
             SetState(GameState.GameOver);
             runEnded?.Raise(summary);
-            transition = null;
         }
 
         private RunSummary BuildSummary(BuildingSceneController building)
