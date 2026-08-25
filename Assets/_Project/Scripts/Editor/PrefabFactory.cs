@@ -37,6 +37,7 @@ namespace Vent.Editor
 
         public static void CreateAll(GameAssets a)
         {
+            a.MuzzleSmokePrefab = CreateMuzzleSmoke(a);
             a.MuzzleFlashPrefab = CreateMuzzleFlash(a);
             a.TracerPrefab = CreateTracer(a);
             a.ImpactPrefab = CreateImpact("VFX_Impact", a.Spark, count: 14, speedMin: 3f, speedMax: 6f, size: 0.03f, gravity: 1.5f);
@@ -61,6 +62,12 @@ namespace Vent.Editor
 
         // ------------------------------------------------------------------ VFX
 
+        /// <summary>
+        /// The flash itself: three additive sprite planes — two crossed along the barrel and one facing
+        /// forward at the tip — so it has volume from every angle, plus a point light. Smoke and
+        /// sparks are a separate world-space prefab (<see cref="CreateMuzzleSmoke"/>) so they can
+        /// outlive the flash and drift after the gun has moved on.
+        /// </summary>
         private static GameObject CreateMuzzleFlash(GameAssets a)
         {
             var root = new GameObject("VFX_MuzzleFlash");
@@ -69,29 +76,126 @@ namespace Vent.Editor
 
             var lightGo = new GameObject("Light");
             lightGo.transform.SetParent(root.transform, false);
+            lightGo.transform.localPosition = new Vector3(0f, 0f, 0.15f);
             Light light = lightGo.AddComponent<Light>();
             light.type = LightType.Point;
-            light.color = new Color(1f, 0.72f, 0.35f);
-            light.range = 5f;
-            light.intensity = 6f;
+            light.color = new Color(1f, 0.68f, 0.32f);
+            light.range = 7f;
+            light.intensity = 9f;
             light.shadows = LightShadows.None;
 
             var visual = new GameObject("Visual");
             visual.transform.SetParent(root.transform, false);
-            for (int i = 0; i < 3; i++)
+            var renderers = new List<Renderer>();
+            // Side planes: quads lying along +Z, crossed at 90°, textured so the spikes point forward.
+            for (int i = 0; i < 2; i++)
             {
-                GameObject blade = Primitive(PrimitiveType.Cube, $"Blade{i}", visual.transform,
-                    new Vector3(0f, 0f, 0.08f), new Vector3(0.05f, 0.22f, 0.01f), a.Flash, collider: false);
-                blade.transform.localRotation = Quaternion.Euler(0f, 0f, i * 60f);
+                GameObject plane = Primitive(PrimitiveType.Quad, $"Side{i}", visual.transform, new Vector3(0f, 0f, 0.2f), new Vector3(0.44f, 0.26f, 1f), a.FlashSprite, false);
+                plane.transform.localRotation = Quaternion.Euler(0f, 90f, i * 90f);
+                renderers.Add(plane.GetComponent<Renderer>());
             }
 
-            SetPrivate(flash, "flashLight", light);
-            SetPrivate(flash, "visual", visual.transform);
+            // Front plane: faces down the barrel so the flash reads head-on and in mirrors of the pistol slide.
+            GameObject front = Primitive(PrimitiveType.Quad, "Front", visual.transform, new Vector3(0f, 0f, 0.06f), new Vector3(0.3f, 0.3f, 1f), a.FlashSprite, false);
+            renderers.Add(front.GetComponent<Renderer>());
+            foreach (Renderer r in renderers)
+            {
+                r.shadowCastingMode = ShadowCastingMode.Off;
+                r.receiveShadows = false;
+            }
+
+            flash.Configure(light, visual.transform, renderers.ToArray(), a.MuzzleSmokePrefab);
             Layers.SetRecursively(root, Layers.WeaponViewIndex);
             // Lights are culled per camera by layer. The Player layer carries no renderers and is
             // visible to both the world camera and the weapon overlay camera, so a light placed
             // there illuminates the room and the gun alike.
             lightGo.layer = Layers.PlayerIndex;
+            return Save(root);
+        }
+
+        /// <summary>Gun smoke and sparks, spawned at the muzzle in world space and left behind: a puff that drifts up and a few hot streaks forward.</summary>
+        private static GameObject CreateMuzzleSmoke(GameAssets a)
+        {
+            var root = new GameObject("VFX_MuzzleSmoke");
+            root.AddComponent<PooledObject>();
+            root.AddComponent<AutoRelease>().Lifetime = 1.4f;
+
+            var smoke = root.AddComponent<ParticleSystem>();
+            ParticleSystem.MainModule main = smoke.main;
+            main.duration = 0.3f;
+            main.loop = false;
+            main.playOnAwake = true;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.5f, 0.9f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.6f, 1.6f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.08f, 0.16f);
+            main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            main.gravityModifier = -0.04f; // hot: drifts up
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.maxParticles = 16;
+            ParticleSystem.EmissionModule emission = smoke.emission;
+            emission.rateOverTime = 0f;
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)5, (short)7) });
+            ParticleSystem.ShapeModule shape = smoke.shape;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = 18f;
+            shape.radius = 0.01f;
+            ParticleSystem.SizeOverLifetimeModule size = smoke.sizeOverLifetime;
+            size.enabled = true;
+            size.size = new ParticleSystem.MinMaxCurve(1f, new AnimationCurve(new Keyframe(0f, 0.6f), new Keyframe(1f, 3.2f)));
+            ParticleSystem.ColorOverLifetimeModule color = smoke.colorOverLifetime;
+            color.enabled = true;
+            var grad = new Gradient();
+            grad.SetKeys(
+                new[] { new GradientColorKey(new Color(0.9f, 0.85f, 0.75f), 0f), new GradientColorKey(new Color(0.6f, 0.6f, 0.62f), 0.25f), new GradientColorKey(new Color(0.5f, 0.5f, 0.52f), 1f) },
+                new[] { new GradientAlphaKey(0.8f, 0f), new GradientAlphaKey(0.45f, 0.3f), new GradientAlphaKey(0f, 1f) });
+            color.color = grad;
+            ParticleSystem.RotationOverLifetimeModule rot = smoke.rotationOverLifetime;
+            rot.enabled = true;
+            rot.z = new ParticleSystem.MinMaxCurve(-0.8f, 0.8f);
+            ParticleSystem.LimitVelocityOverLifetimeModule drag = smoke.limitVelocityOverLifetime;
+            drag.enabled = true;
+            drag.dampen = 0.35f;
+            var smokeRenderer = root.GetComponent<ParticleSystemRenderer>();
+            smokeRenderer.renderMode = ParticleSystemRenderMode.Billboard;
+            smokeRenderer.sharedMaterial = a.Smoke;
+            smokeRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            smokeRenderer.sortingFudge = -10f; // draw after the world, before the additive flash
+
+            var sparksGo = new GameObject("Sparks");
+            sparksGo.transform.SetParent(root.transform, false);
+            var sparks = sparksGo.AddComponent<ParticleSystem>();
+            ParticleSystem.MainModule sm = sparks.main;
+            sm.duration = 0.2f;
+            sm.loop = false;
+            sm.playOnAwake = true;
+            sm.startLifetime = new ParticleSystem.MinMaxCurve(0.12f, 0.3f);
+            sm.startSpeed = new ParticleSystem.MinMaxCurve(6f, 14f);
+            sm.startSize = new ParticleSystem.MinMaxCurve(0.012f, 0.03f);
+            sm.gravityModifier = 0.8f;
+            sm.simulationSpace = ParticleSystemSimulationSpace.World;
+            sm.maxParticles = 24;
+            ParticleSystem.EmissionModule se = sparks.emission;
+            se.rateOverTime = 0f;
+            se.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)5, (short)10) });
+            ParticleSystem.ShapeModule ss = sparks.shape;
+            ss.shapeType = ParticleSystemShapeType.Cone;
+            ss.angle = 12f;
+            ss.radius = 0.01f;
+            ParticleSystem.ColorOverLifetimeModule sc = sparks.colorOverLifetime;
+            sc.enabled = true;
+            var sg = new Gradient();
+            sg.SetKeys(
+                new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(new Color(1f, 0.6f, 0.2f), 0.4f), new GradientColorKey(new Color(0.8f, 0.2f, 0.05f), 1f) },
+                new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 0.6f), new GradientAlphaKey(0f, 1f) });
+            sc.color = sg;
+            var sparkRenderer = sparksGo.GetComponent<ParticleSystemRenderer>();
+            sparkRenderer.renderMode = ParticleSystemRenderMode.Stretch;
+            sparkRenderer.velocityScale = 0.02f;
+            sparkRenderer.lengthScale = 2.5f;
+            sparkRenderer.sharedMaterial = a.SparkGlow;
+            sparkRenderer.shadowCastingMode = ShadowCastingMode.Off;
+
+            // World layer: the world camera draws and depth-tests it against the room; the gun overlays it.
             return Save(root);
         }
 
@@ -102,7 +206,15 @@ namespace Vent.Editor
             line.material = a.Tracer;
             line.positionCount = 2;
             line.useWorldSpace = true;
-            line.widthMultiplier = 0.02f;
+            line.widthMultiplier = 0.035f;
+            // Fat at the muzzle, needle at the far end; white-hot fading to orange.
+            line.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(0.15f, 0.7f), new Keyframe(1f, 0.15f));
+            var gradient = new Gradient();
+            gradient.SetKeys(
+                new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(new Color(1f, 0.85f, 0.55f), 0.2f), new GradientColorKey(new Color(1f, 0.55f, 0.2f), 1f) },
+                new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0.9f, 0.3f), new GradientAlphaKey(0.35f, 1f) });
+            line.colorGradient = gradient;
+            line.textureMode = LineTextureMode.Stretch;
             line.shadowCastingMode = ShadowCastingMode.Off;
             line.receiveShadows = false;
             line.alignment = LineAlignment.View;

@@ -224,7 +224,7 @@ namespace Vent.Editor
             var systems = new GameObject("Systems");
             systems.transform.position = building.PlayerSpawn; // pooled instances are parked here, on the NavMesh
             var pools = systems.AddComponent<PoolRegistry>();
-            SetPrewarm(pools, (a.ZombiePrefab, 12), (a.TracerPrefab, 24), (a.MuzzleFlashPrefab, 6), (a.ImpactPrefab, 24), (a.BloodImpactPrefab, 24), (a.ShellCasingPrefab, 40), (a.PerkPickupPrefab, 4));
+            SetPrewarm(pools, (a.ZombiePrefab, 12), (a.TracerPrefab, 24), (a.MuzzleFlashPrefab, 6), (a.MuzzleSmokePrefab, 12), (a.ImpactPrefab, 24), (a.BloodImpactPrefab, 24), (a.ShellCasingPrefab, 40), (a.PerkPickupPrefab, 4));
 
             var spawner = systems.AddComponent<ZombieSpawner>();
             spawner.Configure(a.Difficulty, a.Zombie, a.Zombies, a.Vents, a.Level);

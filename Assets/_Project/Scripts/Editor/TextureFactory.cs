@@ -110,6 +110,84 @@ namespace Vent.Editor
             return (new Color(g, g, g), 0.5f + weave * 2f);
         });
 
+        // ------------------------------------------------------------------ sprites (RGBA, clamped)
+
+        /// <summary>Muzzle flash: a white-hot core, an orange corona and eight ragged spikes.</summary>
+        public static Texture2D MuzzleFlashSprite() => Sprite("MuzzleFlash", 256, (x, y, n) =>
+        {
+            float dx = x - 0.5f, dy = y - 0.5f;
+            float r = Mathf.Sqrt(dx * dx + dy * dy) * 2f; // 0 centre, 1 edge
+            float angle = Mathf.Atan2(dy, dx);
+            float ragged = n.Fbm(Frac(angle / (2f * Mathf.PI) + 0.5f), r * 0.5f, 8, 4, 3);
+            float spikes = Mathf.Pow(Mathf.Max(0f, Mathf.Cos(angle * 4f + ragged * 1.5f)), 6f) * Mathf.Exp(-r * 2.2f);
+            float corona = Mathf.Exp(-r * r * 6f) * (0.7f + 0.3f * ragged);
+            float core = Mathf.Exp(-r * r * 40f);
+            float i = Mathf.Clamp01(core * 1.2f + corona * 0.9f + spikes * 0.8f);
+            // White core, orange mid, red rim.
+            Color c = Color.Lerp(new Color(1f, 0.35f, 0.1f), new Color(1f, 0.85f, 0.5f), Mathf.Clamp01(i * 1.4f - 0.2f));
+            c = Color.Lerp(c, Color.white, core);
+            return (c, i * Mathf.Clamp01(1.4f - r));
+        });
+
+        /// <summary>A soft grey puff with a little structure, for gun smoke and dust.</summary>
+        public static Texture2D SmokeSprite() => Sprite("Smoke", 128, (x, y, n) =>
+        {
+            float dx = x - 0.5f, dy = y - 0.5f;
+            float r = Mathf.Sqrt(dx * dx + dy * dy) * 2f;
+            float body = n.Fbm(x, y, 4, 4, 3);
+            float a = Mathf.Clamp01((1f - r) * 1.3f) * Mathf.Clamp01(0.35f + body * 0.9f);
+            a = a * a;
+            float g = 0.55f + body * 0.25f;
+            return (new Color(g, g, g), a);
+        });
+
+        /// <summary>A hot dot with a soft halo, stretched by the particle renderer into a streak.</summary>
+        public static Texture2D SparkSprite() => Sprite("Spark", 64, (x, y, n) =>
+        {
+            float dx = x - 0.5f, dy = y - 0.5f;
+            float r = Mathf.Sqrt(dx * dx + dy * dy) * 2f;
+            float a = Mathf.Exp(-r * r * 12f) + Mathf.Exp(-r * r * 60f);
+            return (Color.Lerp(new Color(1f, 0.6f, 0.2f), Color.white, Mathf.Exp(-r * r * 60f)), Mathf.Clamp01(a));
+        });
+
+        private static Texture2D Sprite(string name, int size, Func<float, float, Noise, (Color color, float alpha)> recipe)
+        {
+            var noise = new Noise(name.GetHashCode());
+            var pixels = new Color[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    (Color c, float a) = recipe((x + 0.5f) / size, (y + 0.5f) / size, noise);
+                    Color s = Saturate(c);
+                    s.a = Mathf.Clamp01(a);
+                    pixels[y * size + x] = s;
+                }
+            }
+
+            string path = $"{Paths.Textures}/T_{name}.png";
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            tex.SetPixels(pixels);
+            tex.Apply();
+            byte[] png = tex.EncodeToPNG();
+            UnityEngine.Object.DestroyImmediate(tex);
+            string full = Path.Combine(Directory.GetCurrentDirectory(), path);
+            if (!File.Exists(full) || !BytesEqual(File.ReadAllBytes(full), png))
+            {
+                File.WriteAllBytes(full, png);
+            }
+
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+            bool dirty = false;
+            if (importer.wrapMode != TextureWrapMode.Clamp) { importer.wrapMode = TextureWrapMode.Clamp; dirty = true; }
+            if (!importer.alphaIsTransparency) { importer.alphaIsTransparency = true; dirty = true; }
+            if (!importer.sRGBTexture) { importer.sRGBTexture = true; dirty = true; }
+            if (importer.textureCompression != TextureImporterCompression.Uncompressed) { importer.textureCompression = TextureImporterCompression.Uncompressed; dirty = true; }
+            if (dirty) importer.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+        }
+
         // ------------------------------------------------------------------ machinery
 
         private static TextureSet Make(string name, float metersPerTile, float normalStrength, Func<float, float, Noise, (Color color, float height)> recipe)

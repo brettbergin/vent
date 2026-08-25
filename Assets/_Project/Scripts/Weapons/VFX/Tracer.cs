@@ -11,8 +11,8 @@ namespace Vent.Weapons.VFX
     [RequireComponent(typeof(PooledObject))]
     public sealed class Tracer : MonoBehaviour
     {
-        [SerializeField, Min(0.01f)] private float lifetime = 0.08f;
-        [SerializeField, Min(0f)] private float startWidth = 0.02f;
+        [SerializeField, Min(0.01f)] private float lifetime = 0.1f;
+        [SerializeField, Min(0f)] private float startWidth = 0.035f;
 
         private LineRenderer line;
         private PooledObject pooled;
@@ -43,7 +43,15 @@ namespace Vent.Weapons.VFX
                 return;
             }
 
-            line.widthMultiplier = startWidth * (1f - t);
+            // Thin out and dim: the glow goes before the line does.
+            float k = 1f - t;
+            line.widthMultiplier = startWidth * k;
+            Color c = line.startColor;
+            c.a = k * k;
+            line.startColor = c;
+            Color e = line.endColor;
+            e.a = 0.35f * k;
+            line.endColor = e;
         }
     }
 }

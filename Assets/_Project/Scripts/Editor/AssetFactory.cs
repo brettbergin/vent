@@ -164,9 +164,16 @@ namespace Vent.Editor
             a.Skybox = Skybox("M_Skybox");
             // Tinted per perk at runtime through a MaterialPropertyBlock; the asset's white is a placeholder.
             a.PerkOrb = Lit("M_PerkOrb", Color.white, smoothness: 0.85f, metallic: 0.1f, emission: Color.white * 2.5f);
-            a.Tracer = Unlit("M_Tracer", new Color(1f, 0.85f, 0.45f));
+            // Gunfire: additive sprites for the flash, the tracer core and sparks; alpha-blended smoke.
+            Texture2D flashSprite = TextureFactory.MuzzleFlashSprite();
+            Texture2D smokeSprite = TextureFactory.SmokeSprite();
+            Texture2D sparkSprite = TextureFactory.SparkSprite();
+            a.FlashSprite = ParticleTextured("M_MuzzleFlash", flashSprite, Color.white, additive: true);
+            a.Smoke = ParticleTextured("M_Smoke", smokeSprite, new Color(0.6f, 0.6f, 0.62f, 0.55f), additive: false);
+            a.SparkGlow = ParticleTextured("M_SparkGlow", sparkSprite, new Color(1f, 0.8f, 0.5f), additive: true);
+            a.Tracer = ParticleTextured("M_Tracer", sparkSprite, new Color(1f, 0.85f, 0.55f), additive: true);
             a.Flash = Unlit("M_Flash", new Color(1f, 0.75f, 0.3f));
-            a.Spark = Particle("M_Spark", new Color(0.9f, 0.85f, 0.7f));
+            a.Spark = ParticleTextured("M_Spark", sparkSprite, new Color(1f, 0.9f, 0.7f), additive: true);
             a.Blood = Particle("M_Blood", new Color(0.45f, 0.05f, 0.05f));
 
             return a;
@@ -316,6 +323,30 @@ namespace Vent.Editor
             m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
             m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
             m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
+        /// <summary>Particles/Unlit with a sprite: additive (fire, glow) or alpha-blended (smoke). Double-sided, no depth write, soft against geometry.</summary>
+        private static Material ParticleTextured(string name, Texture2D sprite, Color tint, bool additive)
+        {
+            Material m = GetOrCreateMaterial(name, "Universal Render Pipeline/Particles/Unlit");
+            m.SetTexture("_BaseMap", sprite);
+            m.SetColor("_BaseColor", tint);
+            m.SetFloat("_Surface", 1f);
+            m.SetFloat("_Blend", additive ? 2f : 0f);
+            m.SetFloat("_ZWrite", 0f);
+            m.SetFloat("_Cull", 0f);
+            m.SetFloat("_SoftParticlesEnabled", 1f);
+            m.SetFloat("_SoftParticlesNearFadeDistance", 0f);
+            m.SetFloat("_SoftParticlesFarFadeDistance", 0.3f);
+            m.SetOverrideTag("RenderType", "Transparent");
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.EnableKeyword("_SOFTPARTICLES_ON");
+            m.SetInt("_SrcBlend", (int)(additive ? UnityEngine.Rendering.BlendMode.SrcAlpha : UnityEngine.Rendering.BlendMode.SrcAlpha));
+            m.SetInt("_DstBlend", (int)(additive ? UnityEngine.Rendering.BlendMode.One : UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha));
+            if (additive) m.EnableKeyword("_ALPHAMODULATE_ON"); else m.DisableKeyword("_ALPHAMODULATE_ON");
+            m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent + (additive ? 10 : 0);
             EditorUtility.SetDirty(m);
             return m;
         }
