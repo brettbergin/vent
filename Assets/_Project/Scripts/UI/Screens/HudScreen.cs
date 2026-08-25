@@ -7,8 +7,11 @@ using Vent.Core.Utility;
 namespace Vent.UI.Screens
 {
     /// <summary>
-    /// In-game overlay. Purely reactive: every element is driven by an event channel, and the
-    /// few animated pieces (vignette, hit marker, damage direction) decay in Update.
+    /// In-game overlay. Purely reactive: every event channel writes into a <see cref="HudViewModel"/>
+    /// and the document's runtime data bindings (see <c>Hud.uxml</c>) push the values to the elements.
+    /// The few animated pieces (vignette, hit marker, damage direction, crosshair spread) decay in
+    /// Update and are written to the same model. Only class toggles, which have no binding, touch
+    /// elements directly.
     /// </summary>
     public sealed class HudScreen : UIScreen
     {
@@ -24,9 +27,9 @@ namespace Vent.UI.Screens
         [SerializeField, Min(0f)] private float crosshairPixelsPerDegree = 22f;
         [SerializeField, Min(0f)] private float crosshairMinGap = 5f;
 
-        private Label healthLabel, weaponName, ammoMag, ammoReserve, reloading, weaponLevel, levelLabel, killsLabel, bannerTitle, bannerSub, toastText;
-        private VisualElement healthFill, xpFill, vignette, hitmarker, damageIndicator, banner, toast, ammo;
-        private VisualElement chTop, chBottom, chLeft, chRight;
+        private readonly HudViewModel model = new();
+
+        private VisualElement ammo, hitmarker, banner, toast;
         private VisualElement[] slots;
 
         private float vignetteFlash;
@@ -37,6 +40,9 @@ namespace Vent.UI.Screens
         private int killsRequired = 1;
         private float spreadDegrees;
         private IVisualElementScheduledItem bannerHide, toastHide;
+
+        /// <summary>The bound data source; exposed for tests.</summary>
+        public HudViewModel Model => model;
 
         public void Configure(HealthEventChannel health, WeaponHudEventChannel weapon, WeaponLevelUpEventChannel weaponLevel,
             BoolEventChannel hit, LevelEventChannel level, IntEventChannel kills)
@@ -73,30 +79,21 @@ namespace Vent.UI.Screens
 
         protected override void Bind(VisualElement r)
         {
-            healthLabel = r.Q<Label>("health-label");
-            healthFill = r.Q<VisualElement>("health-fill");
-            weaponName = r.Q<Label>("weapon-name");
+            r.dataSource = model;
+
             ammo = r.Q<VisualElement>("ammo");
-            ammoMag = r.Q<Label>("ammo-mag");
-            ammoReserve = r.Q<Label>("ammo-reserve");
-            reloading = r.Q<Label>("reloading");
-            weaponLevel = r.Q<Label>("weapon-level");
-            xpFill = r.Q<VisualElement>("xp-fill");
-            levelLabel = r.Q<Label>("level-label");
-            killsLabel = r.Q<Label>("kills-label");
-            vignette = r.Q<VisualElement>("vignette");
             hitmarker = r.Q<VisualElement>("hitmarker");
-            damageIndicator = r.Q<VisualElement>("damage-indicator");
             banner = r.Q<VisualElement>("banner");
-            bannerTitle = r.Q<Label>("banner-title");
-            bannerSub = r.Q<Label>("banner-sub");
             toast = r.Q<VisualElement>("toast");
-            toastText = r.Q<Label>("toast-text");
-            chTop = r.Q<VisualElement>("ch-top");
-            chBottom = r.Q<VisualElement>("ch-bottom");
-            chLeft = r.Q<VisualElement>("ch-left");
-            chRight = r.Q<VisualElement>("ch-right");
             slots = new[] { r.Q<VisualElement>("slot-0"), r.Q<VisualElement>("slot-1") };
+        }
+
+        protected override void Unbind()
+        {
+            if (Root != null)
+            {
+                Root.dataSource = null;
+            }
         }
 
         protected override void OnShown()
@@ -119,38 +116,24 @@ namespace Vent.UI.Screens
 
             vignetteFlash = MathUtil.Damp(vignetteFlash, 0f, 4f, dt);
             float lowHealth = Mathf.Pow(1f - healthNormalized, 2f) * 0.55f;
-            if (vignette != null)
-            {
-                vignette.style.opacity = Mathf.Clamp01(lowHealth + vignetteFlash);
-            }
+            model.VignetteOpacity = Mathf.Clamp01(lowHealth + vignetteFlash);
 
             hitmarkerAlpha = MathUtil.Damp(hitmarkerAlpha, 0f, 9f, dt);
-            if (hitmarker != null)
-            {
-                hitmarker.style.opacity = hitmarkerAlpha;
-            }
+            model.HitmarkerOpacity = hitmarkerAlpha;
 
             damageAlpha = MathUtil.Damp(damageAlpha, 0f, 2.5f, dt);
-            if (damageIndicator != null)
+            model.DamageIndicatorOpacity = damageAlpha;
+            if (damageAlpha > 0.01f && Camera.main != null)
             {
-                damageIndicator.style.opacity = damageAlpha;
-                if (damageAlpha > 0.01f && Camera.main != null)
-                {
-                    Vector3 forward = Camera.main.transform.forward;
-                    forward.y = 0f;
-                    float angle = Vector3.SignedAngle(forward.normalized, damageSourceDir, Vector3.up);
-                    damageIndicator.style.rotate = new Rotate(angle);
-                }
+                Vector3 forward = Camera.main.transform.forward;
+                forward.y = 0f;
+                float angle = Vector3.SignedAngle(forward.normalized, damageSourceDir, Vector3.up);
+                model.DamageIndicatorRotation = new Rotate(angle);
             }
 
             float gap = crosshairMinGap + spreadDegrees * crosshairPixelsPerDegree;
-            if (chTop != null)
-            {
-                chTop.style.top = -(gap + 10f);
-                chBottom.style.top = gap;
-                chLeft.style.left = -(gap + 10f);
-                chRight.style.left = gap;
-            }
+            model.CrosshairNear = -(gap + 10f);
+            model.CrosshairFar = gap;
         }
 
         // ---------------------------------------------------------------- handlers
@@ -159,15 +142,8 @@ namespace Vent.UI.Screens
         {
             EnsureBound();
             healthNormalized = info.Normalized;
-            if (healthLabel != null)
-            {
-                healthLabel.text = Mathf.CeilToInt(info.Current).ToString();
-            }
-
-            if (healthFill != null)
-            {
-                healthFill.style.width = Length.Percent(info.Normalized * 100f);
-            }
+            model.HealthText = Mathf.CeilToInt(info.Current).ToString();
+            model.HealthFillWidth = Length.Percent(info.Normalized * 100f);
 
             if (info.Delta < 0f)
             {
@@ -183,15 +159,15 @@ namespace Vent.UI.Screens
         private void OnWeapon(WeaponHudInfo info)
         {
             EnsureBound();
-            if (weaponName != null) weaponName.text = info.Name.ToUpperInvariant();
-            if (ammoMag != null) ammoMag.text = info.Magazine.ToString();
-            if (ammoReserve != null) ammoReserve.text = $"/ {info.Reserve}";
-            if (reloading != null) reloading.text = info.Reloading ? "RELOADING" : string.Empty;
-            if (weaponLevel != null) weaponLevel.text = $"LV {info.Level}";
-            if (xpFill != null) xpFill.style.width = Length.Percent(info.LevelProgress * 100f);
-            ammo?.EnableInClassList("ammo--empty", info.Magazine == 0);
+            model.WeaponName = info.Name.ToUpperInvariant();
+            model.AmmoMagText = info.Magazine.ToString();
+            model.AmmoReserveText = $"/ {info.Reserve}";
+            model.ReloadingText = info.Reloading ? "RELOADING" : string.Empty;
+            model.WeaponLevelText = $"LV {info.Level}";
+            model.XpFillWidth = Length.Percent(info.LevelProgress * 100f);
             spreadDegrees = info.Spread;
 
+            ammo?.EnableInClassList("ammo--empty", info.Magazine == 0);
             if (slots != null)
             {
                 for (int i = 0; i < slots.Length; i++)
@@ -204,12 +180,12 @@ namespace Vent.UI.Screens
         private void OnWeaponLeveled(WeaponLevelUpInfo info)
         {
             EnsureBound();
+            model.ToastText = $"{info.WeaponName.ToUpperInvariant()} LEVEL {info.NewLevel}";
             if (toast == null)
             {
                 return;
             }
 
-            toastText.text = $"{info.WeaponName.ToUpperInvariant()} LEVEL {info.NewLevel}";
             toast.AddToClassList("toast--visible");
             toastHide?.Pause();
             toastHide = toast.schedule.Execute(() => toast.RemoveFromClassList("toast--visible")).StartingIn(1800);
@@ -226,13 +202,13 @@ namespace Vent.UI.Screens
         {
             EnsureBound();
             killsRequired = info.KillsRequired;
-            if (levelLabel != null) levelLabel.text = $"LEVEL {info.Level}";
-            if (killsLabel != null) killsLabel.text = $"0 / {killsRequired}";
+            model.LevelText = $"LEVEL {info.Level}";
+            model.KillsText = $"0 / {killsRequired}";
 
             if (info.Level > 1 && banner != null)
             {
-                bannerTitle.text = $"LEVEL {info.Level}";
-                bannerSub.text = "AMMO RESTOCKED";
+                model.BannerTitle = $"LEVEL {info.Level}";
+                model.BannerSub = "AMMO RESTOCKED";
                 banner.AddToClassList("banner--visible");
                 bannerHide?.Pause();
                 bannerHide = banner.schedule.Execute(() => banner.RemoveFromClassList("banner--visible")).StartingIn(2200);
@@ -242,7 +218,7 @@ namespace Vent.UI.Screens
         private void OnKills(int kills)
         {
             EnsureBound();
-            if (killsLabel != null) killsLabel.text = $"{kills} / {killsRequired}";
+            model.KillsText = $"{kills} / {killsRequired}";
         }
     }
 }

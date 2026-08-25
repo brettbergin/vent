@@ -1,22 +1,38 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
   <Style src="Theme.uss" />
   <Style src="Hud.uss" />
+  <!-- Data source: HudViewModel (set by HudScreen). Values bind here; class toggles stay in code. -->
   <ui:VisualElement name="hud" class="hud" picking-mode="Ignore">
-    <ui:VisualElement name="vignette" class="vignette" picking-mode="Ignore" />
+    <ui:VisualElement name="vignette" class="vignette" picking-mode="Ignore">
+      <Bindings><ui:DataBinding property="style.opacity" data-source-path="VignetteOpacity" binding-mode="ToTarget" /></Bindings>
+    </ui:VisualElement>
 
     <ui:VisualElement name="damage-indicator" class="damage-indicator" picking-mode="Ignore">
+      <Bindings>
+        <ui:DataBinding property="style.opacity" data-source-path="DamageIndicatorOpacity" binding-mode="ToTarget" />
+        <ui:DataBinding property="style.rotate" data-source-path="DamageIndicatorRotation" binding-mode="ToTarget" />
+      </Bindings>
       <ui:VisualElement class="damage-indicator__arrow" picking-mode="Ignore" />
     </ui:VisualElement>
 
     <ui:VisualElement name="crosshair" class="crosshair" picking-mode="Ignore">
-      <ui:VisualElement name="ch-top" class="crosshair__bar crosshair__bar--top" picking-mode="Ignore" />
-      <ui:VisualElement name="ch-bottom" class="crosshair__bar crosshair__bar--bottom" picking-mode="Ignore" />
-      <ui:VisualElement name="ch-left" class="crosshair__bar crosshair__bar--left" picking-mode="Ignore" />
-      <ui:VisualElement name="ch-right" class="crosshair__bar crosshair__bar--right" picking-mode="Ignore" />
+      <ui:VisualElement name="ch-top" class="crosshair__bar crosshair__bar--top" picking-mode="Ignore">
+        <Bindings><ui:DataBinding property="style.top" data-source-path="CrosshairNear" binding-mode="ToTarget" /></Bindings>
+      </ui:VisualElement>
+      <ui:VisualElement name="ch-bottom" class="crosshair__bar crosshair__bar--bottom" picking-mode="Ignore">
+        <Bindings><ui:DataBinding property="style.top" data-source-path="CrosshairFar" binding-mode="ToTarget" /></Bindings>
+      </ui:VisualElement>
+      <ui:VisualElement name="ch-left" class="crosshair__bar crosshair__bar--left" picking-mode="Ignore">
+        <Bindings><ui:DataBinding property="style.left" data-source-path="CrosshairNear" binding-mode="ToTarget" /></Bindings>
+      </ui:VisualElement>
+      <ui:VisualElement name="ch-right" class="crosshair__bar crosshair__bar--right" picking-mode="Ignore">
+        <Bindings><ui:DataBinding property="style.left" data-source-path="CrosshairFar" binding-mode="ToTarget" /></Bindings>
+      </ui:VisualElement>
       <ui:VisualElement class="crosshair__dot" picking-mode="Ignore" />
     </ui:VisualElement>
 
     <ui:VisualElement name="hitmarker" class="hitmarker" picking-mode="Ignore">
+      <Bindings><ui:DataBinding property="style.opacity" data-source-path="HitmarkerOpacity" binding-mode="ToTarget" /></Bindings>
       <ui:VisualElement class="hitmarker__bar" style="rotate: 45deg;" picking-mode="Ignore" />
       <ui:VisualElement class="hitmarker__bar" style="rotate: 135deg;" picking-mode="Ignore" />
       <ui:VisualElement class="hitmarker__bar" style="rotate: 225deg;" picking-mode="Ignore" />
@@ -24,27 +40,47 @@
     </ui:VisualElement>
 
     <ui:VisualElement name="top" class="top-center" picking-mode="Ignore">
-      <ui:Label name="level-label" text="LEVEL 1" class="label--small" />
-      <ui:Label name="kills-label" text="0 / 8" class="label--medium label--accent" />
+      <ui:Label name="level-label" text="LEVEL 1" class="label--small">
+        <Bindings><ui:DataBinding property="text" data-source-path="LevelText" binding-mode="ToTarget" /></Bindings>
+      </ui:Label>
+      <ui:Label name="kills-label" text="0 / 8" class="label--medium label--accent">
+        <Bindings><ui:DataBinding property="text" data-source-path="KillsText" binding-mode="ToTarget" /></Bindings>
+      </ui:Label>
     </ui:VisualElement>
 
     <ui:VisualElement name="bottom-left" class="bottom-left" picking-mode="Ignore">
-      <ui:Label name="health-label" text="100" class="label--big" />
+      <ui:Label name="health-label" text="100" class="label--big">
+        <Bindings><ui:DataBinding property="text" data-source-path="HealthText" binding-mode="ToTarget" /></Bindings>
+      </ui:Label>
       <ui:VisualElement class="bar bar--health" picking-mode="Ignore">
-        <ui:VisualElement name="health-fill" class="bar__fill bar__fill--health" picking-mode="Ignore" />
+        <ui:VisualElement name="health-fill" class="bar__fill bar__fill--health" picking-mode="Ignore">
+          <Bindings><ui:DataBinding property="style.width" data-source-path="HealthFillWidth" binding-mode="ToTarget" /></Bindings>
+        </ui:VisualElement>
       </ui:VisualElement>
     </ui:VisualElement>
 
     <ui:VisualElement name="bottom-right" class="bottom-right" picking-mode="Ignore">
-      <ui:Label name="weapon-name" text="SMG" class="label--small" />
+      <ui:Label name="weapon-name" text="SMG" class="label--small">
+        <Bindings><ui:DataBinding property="text" data-source-path="WeaponName" binding-mode="ToTarget" /></Bindings>
+      </ui:Label>
       <ui:VisualElement name="ammo" class="ammo" picking-mode="Ignore">
-        <ui:Label name="ammo-mag" text="30" class="ammo__mag" />
-        <ui:Label name="ammo-reserve" text="/ 120" class="ammo__reserve" />
+        <ui:Label name="ammo-mag" text="30" class="ammo__mag">
+          <Bindings><ui:DataBinding property="text" data-source-path="AmmoMagText" binding-mode="ToTarget" /></Bindings>
+        </ui:Label>
+        <ui:Label name="ammo-reserve" text="/ 120" class="ammo__reserve">
+          <Bindings><ui:DataBinding property="text" data-source-path="AmmoReserveText" binding-mode="ToTarget" /></Bindings>
+        </ui:Label>
       </ui:VisualElement>
-      <ui:Label name="reloading" text="" class="reloading" />
-      <ui:Label name="weapon-level" text="LV 1" class="label--small" />
+      <ui:Label name="reloading" text="" class="reloading">
+        <Bindings><ui:DataBinding property="text" data-source-path="ReloadingText" binding-mode="ToTarget" /></Bindings>
+      </ui:Label>
+      <ui:Label name="weapon-level" text="LV 1" class="label--small">
+        <Bindings><ui:DataBinding property="text" data-source-path="WeaponLevelText" binding-mode="ToTarget" /></Bindings>
+      </ui:Label>
       <ui:VisualElement class="bar bar--xp" picking-mode="Ignore">
-        <ui:VisualElement name="xp-fill" class="bar__fill bar__fill--xp" picking-mode="Ignore" />
+        <ui:VisualElement name="xp-fill" class="bar__fill bar__fill--xp" picking-mode="Ignore">
+          <Bindings><ui:DataBinding property="style.width" data-source-path="XpFillWidth" binding-mode="ToTarget" /></Bindings>
+        </ui:VisualElement>
       </ui:VisualElement>
       <ui:VisualElement name="slots" class="weapon-slots" picking-mode="Ignore">
         <ui:Label name="slot-0" text="1" class="slot slot--active" />
@@ -53,12 +89,18 @@
     </ui:VisualElement>
 
     <ui:VisualElement name="banner" class="banner" picking-mode="Ignore">
-      <ui:Label name="banner-title" text="LEVEL 2" class="banner__title" />
-      <ui:Label name="banner-sub" text="AMMO RESTOCKED" class="banner__sub" />
+      <ui:Label name="banner-title" text="LEVEL 2" class="banner__title">
+        <Bindings><ui:DataBinding property="text" data-source-path="BannerTitle" binding-mode="ToTarget" /></Bindings>
+      </ui:Label>
+      <ui:Label name="banner-sub" text="AMMO RESTOCKED" class="banner__sub">
+        <Bindings><ui:DataBinding property="text" data-source-path="BannerSub" binding-mode="ToTarget" /></Bindings>
+      </ui:Label>
     </ui:VisualElement>
 
     <ui:VisualElement name="toast" class="toast" picking-mode="Ignore">
-      <ui:Label name="toast-text" text="SMG LEVEL 2" class="toast__text" />
+      <ui:Label name="toast-text" text="SMG LEVEL 2" class="toast__text">
+        <Bindings><ui:DataBinding property="text" data-source-path="ToastText" binding-mode="ToTarget" /></Bindings>
+      </ui:Label>
     </ui:VisualElement>
   </ui:VisualElement>
 </ui:UXML>
