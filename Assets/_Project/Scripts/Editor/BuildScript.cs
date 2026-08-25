@@ -15,6 +15,7 @@ namespace Vent.Editor
             Build(BuildTarget.StandaloneOSX, "Builds/Vent.app");
         }
 
+        [MenuItem("Vent/Build Windows x64")]
         public static void BuildWindows()
         {
             Build(BuildTarget.StandaloneWindows64, "Builds/Windows/Vent.exe");

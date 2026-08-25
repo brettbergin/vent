@@ -9,7 +9,10 @@
     "Vent.Enemies",
     "Vent.Gameplay",
     "Vent.Editor",
-    "Vent.UI"
+    "Vent.UI",
+    "Unity.RenderPipelines.Core.Runtime",
+    "Unity.RenderPipelines.Universal.Runtime",
+    "Unity.RenderPipelines.GPUDriven.Runtime"
   ],
   "includePlatforms": [
     "Editor"

@@ -9,7 +9,11 @@
     "Vent.Weapons",
     "Vent.Enemies",
     "Vent.Gameplay",
-    "Unity.AI.Navigation"
+    "Unity.AI.Navigation",
+    "Unity.InputSystem",
+    "Unity.RenderPipelines.Core.Runtime",
+    "Unity.RenderPipelines.Universal.Runtime",
+    "Unity.RenderPipelines.GPUDriven.Runtime"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
