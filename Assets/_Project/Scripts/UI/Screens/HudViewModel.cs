@@ -31,6 +31,7 @@ namespace Vent.UI.Screens
         private string bannerTitle = string.Empty;
         private string bannerSub = string.Empty;
         private string toastText = string.Empty;
+        private string perkText = string.Empty;
         private StyleFloat vignetteOpacity = 0f;
         private StyleFloat hitmarkerOpacity = 0f;
         private StyleFloat damageIndicatorOpacity = 0f;
@@ -51,6 +52,9 @@ namespace Vent.UI.Screens
         [CreateProperty] public string BannerTitle { get => bannerTitle; set => Set(ref bannerTitle, value); }
         [CreateProperty] public string BannerSub { get => bannerSub; set => Set(ref bannerSub, value); }
         [CreateProperty] public string ToastText { get => toastText; set => Set(ref toastText, value); }
+
+        /// <summary>Active timed perks with their countdowns; empty when none.</summary>
+        [CreateProperty] public string PerkText { get => perkText; set => Set(ref perkText, value); }
         [CreateProperty] public StyleFloat VignetteOpacity { get => vignetteOpacity; set => Set(ref vignetteOpacity, value); }
         [CreateProperty] public StyleFloat HitmarkerOpacity { get => hitmarkerOpacity; set => Set(ref hitmarkerOpacity, value); }
         [CreateProperty] public StyleFloat DamageIndicatorOpacity { get => damageIndicatorOpacity; set => Set(ref damageIndicatorOpacity, value); }

@@ -19,13 +19,20 @@ namespace Vent.Tests.EditMode
         public void TearDown() => Object.DestroyImmediate(profile);
 
         [Test]
-        public void LevelOneIsBaseline()
+        public void LevelOneIsAWarmUpAndLevelFiveIsBaseline()
         {
-            DifficultySnapshot s = profile.Evaluate(1);
-            Assert.AreEqual(1f, s.HealthMultiplier, 1e-4f);
-            Assert.AreEqual(1f, s.DamageMultiplier, 1e-4f);
-            Assert.AreEqual(1f, s.SpeedMultiplier, 1e-4f);
-            Assert.AreEqual(8, s.KillsRequired);
+            DifficultySnapshot first = profile.Evaluate(1);
+            Assert.Less(first.HealthMultiplier, 0.6f, "level 1 zombies die in a few shots");
+            Assert.LessOrEqual(first.DamageMultiplier, 0.5f, "level 1 zombies hit softly");
+            Assert.Less(first.SpeedMultiplier, 0.9f, "level 1 zombies are outwalked");
+            Assert.LessOrEqual(first.MaxConcurrent, 2, "level 1 never crowds the player");
+            Assert.GreaterOrEqual(first.SpawnInterval, 4.5f);
+            Assert.AreEqual(6, first.KillsRequired);
+
+            DifficultySnapshot baseline = profile.Evaluate(5);
+            Assert.AreEqual(1f, baseline.HealthMultiplier, 1e-4f);
+            Assert.AreEqual(1f, baseline.DamageMultiplier, 1e-4f);
+            Assert.AreEqual(1f, baseline.SpeedMultiplier, 1e-4f);
         }
 
         [Test]

@@ -24,6 +24,7 @@ namespace Vent.Player.Health
 
         private float current;
         private float lastDamageTime = float.NegativeInfinity;
+        private float invulnerableUntil = float.NegativeInfinity;
 
         public float Current => current;
         public float Max => maxHealth;
@@ -32,6 +33,18 @@ namespace Vent.Player.Health
 
         /// <summary>When true damage is ignored (menus, the brief spawn grace window).</summary>
         public bool Invulnerable { get; set; }
+
+        /// <summary>True while either the manual flag or a timed grant (the Invulnerable perk) is in effect.</summary>
+        public bool IsInvulnerable => Invulnerable || Time.time < invulnerableUntil;
+
+        /// <summary>Seconds of timed invulnerability left (zero when none).</summary>
+        public float InvulnerableSecondsLeft => Mathf.Max(0f, invulnerableUntil - Time.time);
+
+        /// <summary>Ignore damage for <paramref name="seconds"/>; a second grant extends rather than stacks.</summary>
+        public void GrantInvulnerability(float seconds)
+        {
+            invulnerableUntil = Mathf.Max(invulnerableUntil, Time.time + Mathf.Max(0f, seconds));
+        }
 
         public HealthEventChannel HealthChanged
         {
@@ -61,7 +74,7 @@ namespace Vent.Player.Health
 
         public DamageResult ApplyDamage(in DamageInfo info)
         {
-            if (!IsAlive || Invulnerable || info.Amount <= 0f)
+            if (!IsAlive || IsInvulnerable || info.Amount <= 0f)
             {
                 return DamageResult.None;
             }
@@ -103,6 +116,7 @@ namespace Vent.Player.Health
             float before = current;
             current = maxHealth;
             lastDamageTime = float.NegativeInfinity;
+            invulnerableUntil = float.NegativeInfinity;
             Publish(current - before, Vector3.zero);
         }
 

@@ -40,6 +40,8 @@ namespace Vent.Weapons.Runtime
     public sealed class Weapon : MonoBehaviour
     {
         private const float MaxRaycastFallback = 200f;
+        /// <summary>Damage per hit while the One Shot perk is active: more than any zombie will ever have.</summary>
+        public const float OneShotDamage = 1_000_000f;
 
         public WeaponDefinition Definition { get; private set; }
         public WeaponProgression Progression { get; private set; }
@@ -55,6 +57,10 @@ namespace Vent.Weapons.Runtime
         /// <summary>Total shots fired this run (stats screen).</summary>
         public int ShotsFired { get; private set; }
         public int ShotsHit { get; private set; }
+
+        /// <summary>True while the One Shot perk is active: any hit kills.</summary>
+        public bool OneShotActive => Time.time < oneShotUntil;
+        public float OneShotSecondsLeft => Mathf.Max(0f, oneShotUntil - Time.time);
 
         private WeaponContext ctx;
         private WeaponViewModel viewModel;
@@ -72,6 +78,7 @@ namespace Vent.Weapons.Runtime
         private bool active = true;
         private float lastPublishedSpread = -1f;
         private float nextSpreadPublish;
+        private float oneShotUntil = float.NegativeInfinity;
 
         // ------------------------------------------------------------------ construction
 
@@ -218,6 +225,25 @@ namespace Vent.Weapons.Runtime
             PublishHud();
         }
 
+        /// <summary>The Instant Reload perk: magazine full right now, whatever the gun was doing.</summary>
+        public void InstantReload()
+        {
+            Magazine = Capacity;
+            if (State == WeaponState.Reloading)
+            {
+                State = WeaponState.Ready;
+            }
+
+            viewModel?.SetChambered(true);
+            PublishHud();
+        }
+
+        /// <summary>Any hit kills for <paramref name="seconds"/>; a second grant extends rather than stacks.</summary>
+        public void GrantOneShot(float seconds)
+        {
+            oneShotUntil = Mathf.Max(oneShotUntil, Time.time + Mathf.Max(0f, seconds));
+        }
+
         public void GrantExperience(int amount)
         {
             Progression.AddExperience(amount);
@@ -232,6 +258,7 @@ namespace Vent.Weapons.Runtime
             Reserve = Definition.StartingReserve;
             bloom = 0f;
             consecutiveShots = 0;
+            oneShotUntil = float.NegativeInfinity;
             viewModel?.SetChambered(true);
             ShotsFired = 0;
             ShotsHit = 0;
@@ -416,7 +443,9 @@ namespace Vent.Weapons.Runtime
         {
             if (Hitbox.TryResolve(hit.collider, out Hitbox hitbox, out IDamageable damageable) && damageable.IsAlive)
             {
-                float damage = Stats.Damage * Ballistics.DamageScale(hit.distance, Definition.FalloffStart, Definition.FalloffEnd, Definition.MinDamageScale);
+                float damage = OneShotActive
+                    ? OneShotDamage
+                    : Stats.Damage * Ballistics.DamageScale(hit.distance, Definition.FalloffStart, Definition.FalloffEnd, Definition.MinDamageScale);
                 var info = new DamageInfo(damage, DamageKind.Bullet, this, hit.point, hit.normal, direction);
                 DamageResult result = hitbox != null
                     ? hitbox.Hit(info.WithAmount(damage, false))

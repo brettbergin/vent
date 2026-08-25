@@ -119,6 +119,14 @@ namespace Vent.Core.Audio
                     return Tone(0.04f, 1800f, 1800f, 90f, 0.3f);
                 case SoundId.UiConfirm:
                     return Arpeggio(new[] { 659.25f, 987.77f }, 0.08f, 0.35f);
+                case SoundId.PerkDrop:
+                    // A soft bell: the orb landing.
+                    return Mix(Tone(0.45f, 1318.5f, 1318.5f, 7f, 0.25f), Tone(0.45f, 1975.5f, 1975.5f, 9f, 0.12f));
+                case SoundId.PerkPickup:
+                    return Arpeggio(new[] { 659.25f, 880f, 1108.7f, 1318.5f, 1760f }, 0.07f, 0.45f);
+                case SoundId.PerkNuke:
+                    // A deep boom with a long rumble; the whole building answers.
+                    return Mix(Tone(1.4f, 110f, 28f, 2.5f, 0.9f), Lowpass(NoiseBurst(rng, 1.2f, 3.5f), 420f, 0.7f), Highpass(NoiseBurst(rng, 0.12f, 30f), 2000f, 0.5f));
                 default:
                     return new float[SampleRate / 10];
             }

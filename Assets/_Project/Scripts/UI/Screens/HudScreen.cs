@@ -1,7 +1,10 @@
 using UnityEngine;
 using UnityEngine.UIElements;
 using Vent.Core;
+using System.Collections.Generic;
+using System.Text;
 using Vent.Core.Events;
+using Vent.Core.Perks;
 using Vent.Core.Utility;
 
 namespace Vent.UI.Screens
@@ -22,6 +25,7 @@ namespace Vent.UI.Screens
         [SerializeField] private BoolEventChannel hitConfirmed;
         [SerializeField] private LevelEventChannel levelChanged;
         [SerializeField] private IntEventChannel killsThisLevelChanged;
+        [SerializeField] private PerkEventChannel perkCollected;
 
         [Header("Tuning")]
         [SerializeField, Min(0f)] private float crosshairPixelsPerDegree = 22f;
@@ -40,13 +44,17 @@ namespace Vent.UI.Screens
         private int killsRequired = 1;
         private float spreadDegrees;
         private IVisualElementScheduledItem bannerHide, toastHide;
+        private readonly Dictionary<PerkKind, float> perkEndTimes = new();
+        private readonly StringBuilder perkBuilder = new();
+        private string lastPerkText = string.Empty;
 
         /// <summary>The bound data source; exposed for tests.</summary>
         public HudViewModel Model => model;
 
         public void Configure(HealthEventChannel health, WeaponHudEventChannel weapon, WeaponLevelUpEventChannel weaponLevel,
-            BoolEventChannel hit, LevelEventChannel level, IntEventChannel kills)
+            BoolEventChannel hit, LevelEventChannel level, IntEventChannel kills, PerkEventChannel perks)
         {
+            perkCollected = perks;
             healthChanged = health;
             weaponChanged = weapon;
             weaponLeveled = weaponLevel;
@@ -64,6 +72,7 @@ namespace Vent.UI.Screens
             hitConfirmed?.Subscribe(OnHit);
             levelChanged?.Subscribe(OnLevel);
             killsThisLevelChanged?.Subscribe(OnKills);
+            perkCollected?.Subscribe(OnPerk);
         }
 
         protected override void OnDisable()
@@ -73,6 +82,7 @@ namespace Vent.UI.Screens
             weaponLeveled?.Unsubscribe(OnWeaponLeveled);
             hitConfirmed?.Unsubscribe(OnHit);
             levelChanged?.Unsubscribe(OnLevel);
+            perkCollected?.Unsubscribe(OnPerk);
             killsThisLevelChanged?.Unsubscribe(OnKills);
             base.OnDisable();
         }
@@ -131,6 +141,8 @@ namespace Vent.UI.Screens
                 model.DamageIndicatorRotation = new Rotate(angle);
             }
 
+            UpdatePerkText();
+
             float gap = crosshairMinGap + spreadDegrees * crosshairPixelsPerDegree;
             model.CrosshairNear = -(gap + 10f);
             model.CrosshairFar = gap;
@@ -180,15 +192,7 @@ namespace Vent.UI.Screens
         private void OnWeaponLeveled(WeaponLevelUpInfo info)
         {
             EnsureBound();
-            model.ToastText = $"{info.WeaponName.ToUpperInvariant()} LEVEL {info.NewLevel}";
-            if (toast == null)
-            {
-                return;
-            }
-
-            toast.AddToClassList("toast--visible");
-            toastHide?.Pause();
-            toastHide = toast.schedule.Execute(() => toast.RemoveFromClassList("toast--visible")).StartingIn(1800);
+            ShowToast($"{info.WeaponName.ToUpperInvariant()} LEVEL {info.NewLevel}");
         }
 
         private void OnHit(bool headshot)
@@ -219,6 +223,60 @@ namespace Vent.UI.Screens
         {
             EnsureBound();
             model.KillsText = $"{kills} / {killsRequired}";
+        }
+
+        private void OnPerk(PerkInfo perk)
+        {
+            EnsureBound();
+            if (perk.IsTimed)
+            {
+                float end = Time.time + perk.Duration;
+                perkEndTimes[perk.Kind] = perkEndTimes.TryGetValue(perk.Kind, out float existing) ? Mathf.Max(existing, end) : end;
+            }
+
+            ShowToast(PerkStyle.DisplayName(perk.Kind));
+        }
+
+        /// <summary>"INVULNERABLE 7.2s   ONE SHOT 3.9s" while timed perks run; cleared when they lapse.</summary>
+        private void UpdatePerkText()
+        {
+            perkBuilder.Clear();
+            float now = Time.time;
+            foreach (KeyValuePair<PerkKind, float> entry in perkEndTimes)
+            {
+                float left = entry.Value - now;
+                if (left <= 0f)
+                {
+                    continue;
+                }
+
+                if (perkBuilder.Length > 0)
+                {
+                    perkBuilder.Append("   ");
+                }
+
+                perkBuilder.Append(PerkStyle.DisplayName(entry.Key)).Append(' ').Append(left.ToString("0.0")).Append('s');
+            }
+
+            string text = perkBuilder.ToString();
+            if (text != lastPerkText)
+            {
+                lastPerkText = text;
+                model.PerkText = text;
+            }
+        }
+
+        private void ShowToast(string text)
+        {
+            model.ToastText = text;
+            if (toast == null)
+            {
+                return;
+            }
+
+            toast.AddToClassList("toast--visible");
+            toastHide?.Pause();
+            toastHide = toast.schedule.Execute(() => toast.RemoveFromClassList("toast--visible")).StartingIn(1800);
         }
     }
 }

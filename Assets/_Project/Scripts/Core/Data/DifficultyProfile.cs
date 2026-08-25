@@ -113,15 +113,19 @@ namespace Vent.Core.Data
         /// </summary>
         public void ApplyDefaults()
         {
-            killsToAdvance = CurveUtil.FromFunction(l => Mathf.Min(8 + 3 * (l - 1), 40), 1, CurveMaxLevel);
-            zombieHealthMultiplier = CurveUtil.FromFunction(l => 1f + 0.18f * (l - 1), 1, CurveMaxLevel);
-            zombieDamageMultiplier = CurveUtil.FromFunction(l => 1f + 0.15f * (l - 1), 1, CurveMaxLevel);
-            zombieSpeedMultiplier = CurveUtil.FromFunction(l => Mathf.Min(1f + 0.03f * (l - 1), 1.6f), 1, CurveMaxLevel);
-            spawnInterval = CurveUtil.FromFunction(l => Mathf.Max(3.0f - 0.12f * (l - 1), 0.8f), 1, CurveMaxLevel);
-            maxConcurrent = CurveUtil.FromFunction(l => Mathf.Min(4 + l, 24), 1, CurveMaxLevel);
+            // Levels 1-4 are the warm-up: zombies start at roughly half strength and reach the definition's
+            // base numbers (1x) at level 5; from there the old ramp continues. The first levels teach the
+            // building, the guns and the vents without a crowd.
+            const int BaseLevel = 5;
+            killsToAdvance = CurveUtil.FromFunction(l => Mathf.Min(6 + 3 * (l - 1), 40), 1, CurveMaxLevel);
+            zombieHealthMultiplier = CurveUtil.FromFunction(l => l < BaseLevel ? Mathf.Lerp(0.55f, 1f, (l - 1) / (float)(BaseLevel - 1)) : 1f + 0.18f * (l - BaseLevel), 1, CurveMaxLevel);
+            zombieDamageMultiplier = CurveUtil.FromFunction(l => l < BaseLevel ? Mathf.Lerp(0.5f, 1f, (l - 1) / (float)(BaseLevel - 1)) : 1f + 0.15f * (l - BaseLevel), 1, CurveMaxLevel);
+            zombieSpeedMultiplier = CurveUtil.FromFunction(l => l < BaseLevel ? Mathf.Lerp(0.8f, 1f, (l - 1) / (float)(BaseLevel - 1)) : Mathf.Min(1f + 0.03f * (l - BaseLevel), 1.6f), 1, CurveMaxLevel);
+            spawnInterval = CurveUtil.FromFunction(l => l < BaseLevel ? 5f - 0.5f * (l - 1) : Mathf.Max(3.0f - 0.12f * (l - BaseLevel), 0.8f), 1, CurveMaxLevel);
+            maxConcurrent = CurveUtil.FromFunction(l => Mathf.Min(1 + l, 24), 1, CurveMaxLevel);
             experienceMultiplier = CurveUtil.FromFunction(l => 1f + 0.1f * (l - 1), 1, CurveMaxLevel);
-            // Annoyed at level 1, fully enraged by level 13, a little worse every level between.
-            aggression = CurveUtil.FromFunction(l => Mathf.Clamp01((l - 1) / 12f), 1, CurveMaxLevel);
+            // Annoyed through level 2, fully enraged by level 14, a little worse every level between.
+            aggression = CurveUtil.FromFunction(l => Mathf.Clamp01((l - 2) / 12f), 1, CurveMaxLevel);
             runStartGrace = 8f;
             // A breather that grows a little with the level: restocked ammo, a moment to reposition.
             levelStartGrace = CurveUtil.FromFunction(l => Mathf.Min(4f + 0.25f * (l - 1), 8f), 1, CurveMaxLevel);

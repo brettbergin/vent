@@ -186,6 +186,26 @@ namespace Vent.Weapons.Runtime
             Current?.PublishHud();
         }
 
+        /// <summary>Instant Reload perk: every gun's magazine is full now.</summary>
+        public void InstantReloadAll()
+        {
+            foreach (Weapon w in weapons)
+            {
+                w.InstantReload();
+            }
+
+            Current?.PublishHud();
+        }
+
+        /// <summary>One Shot perk on every gun, so switching weapons keeps it.</summary>
+        public void GrantOneShot(float seconds)
+        {
+            foreach (Weapon w in weapons)
+            {
+                w.GrantOneShot(seconds);
+            }
+        }
+
         public void ResetForNewRun()
         {
             foreach (Weapon w in weapons)

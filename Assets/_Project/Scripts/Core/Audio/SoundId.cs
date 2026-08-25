@@ -32,5 +32,8 @@ namespace Vent.Core.Audio
         ReloadMagIn,
         ReloadRack,
         SlideLock,
+        PerkDrop,
+        PerkPickup,
+        PerkNuke,
     }
 }

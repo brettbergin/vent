@@ -2,6 +2,7 @@ using UnityEngine;
 using Vent.Core.Audio;
 using Vent.Core.Damage;
 using Vent.Core.Events;
+using Vent.Core.Perks;
 using Vent.Core.Services;
 using Vent.Player.Camera;
 using Vent.Player.Health;
@@ -37,6 +38,8 @@ namespace Vent.Player
         [SerializeField, Tooltip("Level transitions refill ammo and heal; the director never touches the player directly.")]
         private LevelEventChannel levelChanged;
         [SerializeField, Range(0f, 1f)] private float healFractionOnLevelUp = 0.5f;
+        [SerializeField, Tooltip("Perk pickups. The player applies the ones that concern it (ammo, invulnerability, one-shot).")]
+        private PerkEventChannel perkCollected;
 
         private FirstPersonController controller;
         private PlayerLook look;
@@ -52,8 +55,9 @@ namespace Vent.Player
         public UnityEngine.Camera ViewCamera => viewCamera;
 
         /// <summary>Editor-time wiring used by the prefab factory.</summary>
-        public void Configure(InputReader reader, UnityEngine.Camera cam, WeaponInventory weapons, CameraMotion motion, LevelEventChannel levelEvent)
+        public void Configure(InputReader reader, UnityEngine.Camera cam, WeaponInventory weapons, CameraMotion motion, LevelEventChannel levelEvent, PerkEventChannel perkEvent)
         {
+            perkCollected = perkEvent;
             input = reader;
             viewCamera = cam;
             inventory = weapons;
@@ -100,6 +104,7 @@ namespace Vent.Player
             GameServices.Register<IPlayerTarget>(this);
             GameServices.Register(this);
             levelChanged?.Subscribe(OnLevelChanged);
+            perkCollected?.Subscribe(OnPerkCollected);
             if (health != null && health.HealthChanged != null)
             {
                 health.HealthChanged.Subscribe(OnHealthChanged);
@@ -126,6 +131,7 @@ namespace Vent.Player
             GameServices.Unregister<IPlayerTarget>(this);
             GameServices.Unregister(this);
             levelChanged?.Unsubscribe(OnLevelChanged);
+            perkCollected?.Unsubscribe(OnPerkCollected);
             if (health != null && health.HealthChanged != null)
             {
                 health.HealthChanged.Unsubscribe(OnHealthChanged);
@@ -250,6 +256,23 @@ namespace Vent.Player
 
             inventory?.RefillAllAmmo();
             health.Heal(health.Max * healFractionOnLevelUp);
+        }
+
+        /// <summary>Perks the player owns. Nuke is handled by the scene's PerkSystem, which can see the zombies.</summary>
+        private void OnPerkCollected(PerkInfo perk)
+        {
+            switch (perk.Kind)
+            {
+                case PerkKind.InstantReload:
+                    inventory?.InstantReloadAll();
+                    break;
+                case PerkKind.Invulnerable:
+                    health.GrantInvulnerability(perk.Duration);
+                    break;
+                case PerkKind.OneShot:
+                    inventory?.GrantOneShot(perk.Duration);
+                    break;
+            }
         }
 
         private void OnHealthChanged(HealthInfo info)

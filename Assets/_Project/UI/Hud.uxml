@@ -46,6 +46,9 @@
       <ui:Label name="kills-label" text="0 / 8" class="label--medium label--accent">
         <Bindings><ui:DataBinding property="text" data-source-path="KillsText" binding-mode="ToTarget" /></Bindings>
       </ui:Label>
+      <ui:Label name="perk-label" text="" class="label--perk">
+        <Bindings><ui:DataBinding property="text" data-source-path="PerkText" binding-mode="ToTarget" /></Bindings>
+      </ui:Label>
     </ui:VisualElement>
 
     <ui:VisualElement name="bottom-left" class="bottom-left" picking-mode="Ignore">

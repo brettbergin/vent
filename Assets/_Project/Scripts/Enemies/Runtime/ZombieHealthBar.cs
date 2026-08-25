@@ -16,8 +16,8 @@ namespace Vent.Enemies.Runtime
         [SerializeField] private Transform fill;
         [SerializeField] private Renderer fillRenderer;
         [SerializeField] private Renderer trackRenderer;
-        [SerializeField, Min(0f)] private float fadeStart = 18f;
-        [SerializeField, Min(0f)] private float fadeEnd = 30f;
+        [SerializeField, Min(0f)] private float fadeStart = 27f;
+        [SerializeField, Min(0f)] private float fadeEnd = 45f;
         [SerializeField] private Color fullColor = new(0.35f, 0.85f, 0.35f);
         [SerializeField] private Color midColor = new(0.95f, 0.8f, 0.2f);
         [SerializeField] private Color emptyColor = new(0.9f, 0.2f, 0.15f);
