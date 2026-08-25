@@ -105,4 +105,16 @@ namespace Vent.Core.Events
         }
     }
 
+    /// <summary>A noise at a point. <see cref="Loudness"/> scales the hearer's hearing radius (1 = a gunshot).</summary>
+    public readonly struct NoiseInfo
+    {
+        public readonly Vector3 Position;
+        public readonly float Loudness;
+
+        public NoiseInfo(Vector3 position, float loudness = 1f)
+        {
+            Position = position;
+            Loudness = loudness;
+        }
+    }
 }

@@ -20,8 +20,20 @@ MonoBehaviour:
   attackWindup: 0.45
   attackCooldown: 1.1
   attackArc: 60
+  staggerThreshold: 0.3
+  staggerSeconds: 0.45
+  limbDamageMultiplier: 0.65
   emergeSeconds: 1.1
   corpseSeconds: 2.5
   repathInterval: 0.2
   growlIntervalRange: {x: 3, y: 7}
+  annoyedNoticeRadius: 8
+  annoyedHearingRadius: 14
+  enragedAwarenessRadius: 60
+  annoyedAttackWindup: 0.75
+  annoyedAttackCooldown: 1.9
+  annoyedRepathInterval: 0.5
+  wanderSpeedFraction: 0.4
+  wanderRadius: 4
+  wanderRepickRange: {x: 1.5, y: 3.5}
   prefab: {fileID: 4563921048441380806, guid: 14ea6e9f40ac5492aaec8950dcf54fa3, type: 3}

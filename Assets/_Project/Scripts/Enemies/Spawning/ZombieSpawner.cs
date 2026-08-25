@@ -15,6 +15,9 @@ namespace Vent.Enemies.Spawning
     /// profile) it picks a vent and spawns a zombie, as long as fewer than <c>maxConcurrent</c>
     /// are alive. Vents are scored so spawns happen out of the player's sight but not too far
     /// away: the player should feel surrounded, not hunted from across the map.
+    ///
+    /// Two grace periods, both from the profile, hold the spawner: one at run start and one each
+    /// time the level advances. Zombies already out (or already rattling a grate) are unaffected.
     /// </summary>
     public sealed class ZombieSpawner : MonoBehaviour
     {
@@ -52,6 +55,8 @@ namespace Vent.Enemies.Spawning
         public bool IsRunning => running;
         public DifficultySnapshot Snapshot => snapshot;
         public int AliveCount => zombies != null ? zombies.Count : 0;
+        /// <summary>Seconds until the spawner may next pick a vent (zero when ready).</summary>
+        public float SecondsUntilNextSpawn => running ? spawnCooldown.Remaining(Time.time) : 0f;
 
         public void Configure(DifficultyProfile profile, ZombieDefinition def, ZombieRuntimeSet zombieSet, VentRuntimeSet ventSet, LevelEventChannel levelEvent)
         {
@@ -80,7 +85,7 @@ namespace Vent.Enemies.Spawning
         {
             DespawnAll();
             running = true;
-            spawnCooldown.Start(Time.time, 1.5f); // brief grace period after spawn
+            spawnCooldown.Start(Time.time, difficulty != null ? difficulty.RunStartGrace : 1.5f);
         }
 
         public void StopSpawning()
@@ -114,6 +119,12 @@ namespace Vent.Enemies.Spawning
             }
 
             snapshot = difficulty.Evaluate(info.Level);
+
+            // Level 1 is the run start, which has its own grace; every later level gets a breather.
+            if (running && info.Level > 1)
+            {
+                spawnCooldown.Start(Time.time, snapshot.LevelStartGrace);
+            }
 
             // The brief says zombie damage is relative to the current level, so living zombies
             // adopt the new numbers immediately (health fraction preserved).

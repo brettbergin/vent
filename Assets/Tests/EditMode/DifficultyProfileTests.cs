@@ -73,5 +73,36 @@ namespace Vent.Tests.EditMode
             Assert.AreEqual(last.HealthMultiplier, beyond.HealthMultiplier, 1e-4f);
             Assert.AreEqual(last.DamageMultiplier, beyond.DamageMultiplier, 1e-4f);
         }
+
+        [Test]
+        public void GracePeriodsHoldTheSpawnerAtRunStartAndOnEveryLevel()
+        {
+            Assert.Greater(profile.RunStartGrace, 0f, "the first zombie should not appear the instant a run starts");
+            float previous = profile.Evaluate(1).LevelStartGrace;
+            Assert.Greater(previous, 0f);
+            for (int level = 2; level <= 80; level++)
+            {
+                float grace = profile.Evaluate(level).LevelStartGrace;
+                Assert.GreaterOrEqual(grace, previous, $"grace at {level} should not shrink");
+                Assert.LessOrEqual(grace, 8f, $"grace at {level} is capped");
+                previous = grace;
+            }
+        }
+
+        [Test]
+        public void AggressionStartsAnnoyedAndOnlyGrows()
+        {
+            Assert.AreEqual(0f, profile.Evaluate(1).Aggression, 1e-4f, "level 1 zombies are merely annoyed");
+            float previous = 0f;
+            for (int level = 2; level <= 80; level++)
+            {
+                float a = profile.Evaluate(level).Aggression;
+                Assert.GreaterOrEqual(a, previous, $"aggression at {level} should not drop");
+                Assert.LessOrEqual(a, 1f);
+                previous = a;
+            }
+
+            Assert.AreEqual(1f, previous, 1e-4f, "high levels are fully enraged");
+        }
     }
 }

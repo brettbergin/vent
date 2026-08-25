@@ -17,10 +17,14 @@ namespace Vent.Enemies.Runtime
         Dormant,
         /// <summary>Climbing out of a vent; no navigation, no damage.</summary>
         Emerging,
+        /// <summary>Shambling around near its vent; has not noticed the player yet.</summary>
+        Wandering,
         /// <summary>Pathing toward the player.</summary>
         Chasing,
         /// <summary>In range: wind up, strike, cool down.</summary>
         Attacking,
+        /// <summary>Reeling from a heavy hit; stopped and harmless for a moment.</summary>
+        Staggered,
         /// <summary>Corpse; waits, sinks, returns to the pool.</summary>
         Dead,
     }
@@ -28,10 +32,13 @@ namespace Vent.Enemies.Runtime
     /// <summary>
     /// The zombie: a NavMesh agent driven by a small explicit state machine.
     ///
-    /// There is no perception model. Indoors, with vents everywhere, the zombie always knows
-    /// where the player is; what makes it interesting is pathing through rooms and doorways,
-    /// which the NavMesh handles. Damage numbers come from <see cref="ZombieStats"/>, computed
-    /// by the spawner from the difficulty profile, so this class never reads the level.
+    /// Perception is deliberately simple and entirely numeric. A zombie is <em>alerted</em> — and
+    /// stays alerted — once the player is within its notice radius with line of sight, within its
+    /// sense radius (through walls), within hearing of a gunshot, or has hurt it. Until then it
+    /// wanders near its vent. All of those radii and its strike timing come from
+    /// <see cref="ZombieStats"/>, which the spawner interpolates from the difficulty profile's
+    /// aggression, so an "annoyed" level-1 zombie and an "enraged" level-15 zombie are the same
+    /// class with different numbers. This class never reads the level.
     /// </summary>
     [RequireComponent(typeof(NavMeshAgent))]
     [RequireComponent(typeof(PooledObject))]
@@ -41,6 +48,7 @@ namespace Vent.Enemies.Runtime
         [SerializeField] private ZombieDefinition definition;
         [SerializeField] private ZombieRuntimeSet registry;
         [SerializeField] private KillEventChannel killChannel;
+        [SerializeField] private NoiseEventChannel noise;
         [SerializeField] private ZombieAnimator animator;
 
         private NavMeshAgent agent;
@@ -58,6 +66,8 @@ namespace Vent.Enemies.Runtime
         private Vector3 emergeFrom;
         private Vector3 emergeTo;
         private bool struckThisAttack;
+        private bool alerted;
+        private float nextWanderPickTime;
 
         public ZombieState State => state;
         public ZombieStats Stats => stats;
@@ -65,12 +75,15 @@ namespace Vent.Enemies.Runtime
         public float HealthNormalized => stats.MaxHealth > 0f ? health / stats.MaxHealth : 0f;
         public bool IsAlive => state != ZombieState.Dead && state != ZombieState.Dormant && health > 0f;
         public ZombieDefinition Definition => definition;
+        /// <summary>True once the zombie knows where the player is; never resets while alive.</summary>
+        public bool IsAlerted => alerted;
 
-        public void Configure(ZombieDefinition def, ZombieRuntimeSet set, KillEventChannel kills, ZombieAnimator anim)
+        public void Configure(ZombieDefinition def, ZombieRuntimeSet set, KillEventChannel kills, NoiseEventChannel noiseChannel, ZombieAnimator anim)
         {
             definition = def;
             registry = set;
             killChannel = kills;
+            noise = noiseChannel;
             animator = anim;
         }
 
@@ -82,10 +95,15 @@ namespace Vent.Enemies.Runtime
             agent.enabled = false;
         }
 
-        private void OnEnable() => registry?.Add(this);
+        private void OnEnable()
+        {
+            registry?.Add(this);
+            noise?.Subscribe(OnNoise);
+        }
 
         private void OnDisable()
         {
+            noise?.Unsubscribe(OnNoise);
             registry?.Remove(this);
             state = ZombieState.Dormant;
         }
@@ -112,6 +130,7 @@ namespace Vent.Enemies.Runtime
             attackCooldown.Reset();
             repath.Reset();
             struckThisAttack = false;
+            alerted = false;
             nextGrowlTime = Time.time + Random.Range(0.5f, 2f);
 
             animator?.ResetPose();
@@ -124,7 +143,22 @@ namespace Vent.Enemies.Runtime
             float fraction = HealthNormalized;
             stats = newStats;
             health = stats.MaxHealth * fraction;
-            agent.speed = stats.Speed; // legal on a disabled agent; applies once it starts chasing
+            agent.speed = state == ZombieState.Wandering ? stats.WanderSpeed : stats.Speed; // legal on a disabled agent
+        }
+
+        /// <summary>Make the zombie aware of the player from now on (noise, damage, being seen).</summary>
+        public void Alert()
+        {
+            if (alerted)
+            {
+                return;
+            }
+
+            alerted = true;
+            if (state == ZombieState.Wandering)
+            {
+                EnterState(ZombieState.Chasing);
+            }
         }
 
         /// <summary>Instantly remove (run reset). No kill event, no experience.</summary>
@@ -153,18 +187,15 @@ namespace Vent.Enemies.Runtime
                     animator?.SetLocomotion(0f);
                     break;
 
+                case ZombieState.Wandering:
+                    EnsureAgentOnNavMesh();
+                    agent.speed = stats.WanderSpeed;
+                    nextWanderPickTime = 0f; // pick a point immediately
+                    break;
+
                 case ZombieState.Chasing:
-                    if (!agent.enabled)
-                    {
-                        agent.enabled = true;
-                        agent.Warp(emergeTo);
-                    }
-
-                    if (agent.isOnNavMesh)
-                    {
-                        agent.isStopped = false;
-                    }
-
+                    EnsureAgentOnNavMesh();
+                    agent.speed = stats.Speed;
                     repath.Reset();
                     break;
 
@@ -175,14 +206,23 @@ namespace Vent.Enemies.Runtime
                     }
 
                     struckThisAttack = false;
-                    animator?.PlayAttack(definition.AttackWindup);
+                    animator?.PlayAttack(stats.AttackWindup);
                     SfxPlayer.TryPlayAt(SoundId.ZombieAttack, transform.position, 0.8f);
+                    break;
+
+                case ZombieState.Staggered:
+                    if (agent.isOnNavMesh)
+                    {
+                        agent.isStopped = true;
+                    }
+
+                    struckThisAttack = true; // an interrupted attack never lands
+                    animator?.PlayStagger(definition.StaggerSeconds);
                     break;
 
                 case ZombieState.Dead:
                     agent.enabled = false;
                     SetCollidersEnabled(false);
-                    animator?.PlayDeath(definition.CorpseSeconds);
                     break;
             }
         }
@@ -197,11 +237,21 @@ namespace Vent.Enemies.Runtime
                 case ZombieState.Emerging:
                     TickEmerging();
                     break;
+                case ZombieState.Wandering:
+                    TickWandering();
+                    break;
                 case ZombieState.Chasing:
                     TickChasing();
                     break;
                 case ZombieState.Attacking:
                     TickAttacking();
+                    break;
+                case ZombieState.Staggered:
+                    if (stateTimer >= definition.StaggerSeconds)
+                    {
+                        EnterState(ZombieState.Chasing);
+                    }
+
                     break;
                 case ZombieState.Dead:
                     if (stateTimer >= definition.CorpseSeconds)
@@ -232,7 +282,82 @@ namespace Vent.Enemies.Runtime
 
             if (t >= 1f)
             {
-                EnterState(ZombieState.Chasing);
+                EnterState(alerted || CanPerceivePlayer() ? ZombieState.Chasing : ZombieState.Wandering);
+            }
+        }
+
+        private void TickWandering()
+        {
+            if (CanPerceivePlayer())
+            {
+                Alert();
+                return;
+            }
+
+            if (Time.time >= nextWanderPickTime && agent.isOnNavMesh)
+            {
+                nextWanderPickTime = Time.time + Random.Range(definition.WanderRepickRange.x, definition.WanderRepickRange.y);
+                Vector2 offset = Random.insideUnitCircle * definition.WanderRadius;
+                Vector3 candidate = transform.position + new Vector3(offset.x, 0f, offset.y);
+                if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, definition.WanderRadius, NavMesh.AllAreas))
+                {
+                    agent.isStopped = false;
+                    agent.SetDestination(hit.position);
+                }
+            }
+
+            animator?.SetLocomotion(agent.velocity.magnitude / Mathf.Max(0.1f, stats.Speed));
+        }
+
+        /// <summary>Sight (needs line of sight) or "sense" (through walls), per the current stats.</summary>
+        private bool CanPerceivePlayer()
+        {
+            if (target == null || !target.IsAlive)
+            {
+                return false;
+            }
+
+            Vector3 eye = transform.position + Vector3.up * 1.5f;
+            Vector3 toTarget = target.AimPoint - eye;
+            float distance = toTarget.magnitude;
+            if (distance <= stats.SenseRadius)
+            {
+                return true;
+            }
+
+            if (distance > stats.NoticeRadius)
+            {
+                return false;
+            }
+
+            return !Physics.Raycast(eye, toTarget / distance, distance, Layers.OcclusionMask, QueryTriggerInteraction.Ignore);
+        }
+
+        private void OnNoise(NoiseInfo info)
+        {
+            if (alerted || !IsAlive)
+            {
+                return;
+            }
+
+            float hearing = stats.HearingRadius * Mathf.Max(0f, info.Loudness);
+            if ((info.Position - transform.position).sqrMagnitude <= hearing * hearing)
+            {
+                Alert();
+            }
+        }
+
+        private void EnsureAgentOnNavMesh()
+        {
+            if (!agent.enabled)
+            {
+                agent.enabled = true;
+                agent.Warp(emergeTo);
+            }
+
+            if (agent.isOnNavMesh)
+            {
+                agent.isStopped = false;
             }
         }
 
@@ -249,7 +374,7 @@ namespace Vent.Enemies.Runtime
                 return;
             }
 
-            if (repath.TryConsume(Time.time, definition.RepathInterval) && agent.isOnNavMesh)
+            if (repath.TryConsume(Time.time, stats.RepathInterval) && agent.isOnNavMesh)
             {
                 agent.SetDestination(target.Position);
             }
@@ -269,15 +394,15 @@ namespace Vent.Enemies.Runtime
                 FaceTowards(target.Position, 720f * Time.deltaTime);
             }
 
-            if (!struckThisAttack && stateTimer >= definition.AttackWindup)
+            if (!struckThisAttack && stateTimer >= stats.AttackWindup)
             {
                 struckThisAttack = true;
                 TryStrike();
-                attackCooldown.Start(Time.time, definition.AttackCooldown);
+                attackCooldown.Start(Time.time, stats.AttackCooldown);
             }
 
             // Recovery: stay in the attack pose briefly, then reassess.
-            if (stateTimer >= definition.AttackWindup + 0.25f)
+            if (stateTimer >= stats.AttackWindup + 0.25f)
             {
                 EnterState(ZombieState.Chasing);
             }
@@ -323,12 +448,23 @@ namespace Vent.Enemies.Runtime
 
             float dealt = Mathf.Min(health, info.Amount);
             health -= dealt;
-            animator?.Flinch(info.Direction, info.Headshot ? 1f : 0.5f);
+            Alert(); // getting shot ends any doubt about where the player is
 
             if (health <= 0f)
             {
                 Die(info);
                 return new DamageResult(dealt, true);
+            }
+
+            // Heavy hits and headshots stagger: the zombie stops and reels, so good shots buy time.
+            bool heavy = stats.MaxHealth > 0f && dealt / stats.MaxHealth >= definition.StaggerThreshold;
+            if ((heavy || info.Headshot) && state != ZombieState.Emerging && state != ZombieState.Staggered)
+            {
+                EnterState(ZombieState.Staggered);
+            }
+            else
+            {
+                animator?.Flinch(info.Direction, info.Headshot ? 1f : 0.5f);
             }
 
             SfxPlayer.TryPlayAt(SoundId.ZombieHurt, info.Point, 0.5f);
@@ -338,6 +474,7 @@ namespace Vent.Enemies.Runtime
         private void Die(in DamageInfo killingBlow)
         {
             EnterState(ZombieState.Dead);
+            animator?.PlayDeath(definition.CorpseSeconds, killingBlow.Direction);
             SfxPlayer.TryPlayAt(SoundId.ZombieDeath, transform.position, 0.9f);
             killChannel?.Raise(new KillInfo(transform.position + Vector3.up, killingBlow.Source, killingBlow.Headshot, stats.Experience));
         }
