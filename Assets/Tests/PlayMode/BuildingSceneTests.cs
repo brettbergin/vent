@@ -56,6 +56,42 @@ namespace Vent.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator PlayerShovedOutsideIsReturnedToTheBuilding()
+        {
+            building.BeginRun();
+            // Let containment cache a known-good position at the spawn point.
+            for (int i = 0; i < 3; i++)
+            {
+                yield return null;
+            }
+
+            // Simulate being pushed clean out of the building WITHOUT going through Teleport
+            // (which would record the outside position as safe). Move the controller directly.
+            var controller = player.GetComponent<CharacterController>();
+            var outside = new Vector3(500f, 0f, 500f);
+            controller.enabled = false;
+            player.transform.position = outside;
+            controller.enabled = true;
+
+            Assert.IsFalse(NavMesh.SamplePosition(outside, out _, 3f, NavMesh.AllAreas), "sanity: the chosen point is outside the NavMesh");
+
+            // Containment runs each frame after movement; a few frames must bring the player home.
+            for (int i = 0; i < 10; i++)
+            {
+                yield return null;
+            }
+
+            Assert.IsTrue(NavMesh.SamplePosition(player.Position, out _, 2f, NavMesh.AllAreas),
+                "player must be returned onto the NavMesh after being pushed outside");
+            // The building is a ~40x30 m footprint centred on the origin; being back within it
+            // (and far from the 500,500 breach point) proves containment pulled the player home.
+            Vector3 planar = new Vector3(player.Position.x, 0f, player.Position.z);
+            Assert.Less(planar.magnitude, 40f, "player must be returned inside the building footprint");
+            Assert.Greater(Vector3.Distance(player.Position, outside), 400f, "player must no longer be at the outside position");
+            Assert.IsTrue(player.Health.IsAlive, "player should survive being briefly outside");
+        }
+
+        [UnityTest]
         public IEnumerator PlayerCannotLeaveTheBuilding()
         {
             // From the player's eye, a ray in any horizontal direction must hit Environment (a wall) within the building's extents.

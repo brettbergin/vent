@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using Vent.Core.Utility;
@@ -71,53 +72,65 @@ namespace Vent.Editor
         /// collide with each other (NavMesh avoidance handles crowding) or with bullets' targets
         /// twice; everything else uses the defaults.
         /// </summary>
+        /// <summary>
+        /// Defines which physics layers may generate contacts. Three pairs are disabled:
+        ///  - the view-model layer collides with nothing (it is render-only);
+        ///  - zombies do not collide with each other or with vents (they separate via NavMesh
+        ///    avoidance, not physics);
+        ///  - zombies do not collide with the player. This last one matters: the player is a
+        ///    CharacterController, and Move()'s penetration recovery ejects it out of any colliders
+        ///    it overlaps. A crowd of zombies pressing in could otherwise squeeze the controller
+        ///    straight through a wall and out of the building. Zombie damage is applied in code
+        ///    (see Zombie.TryStrike), so removing the physical contact costs nothing.
+        /// </summary>
         private static void ConfigureCollisionMatrix()
         {
             int weaponView = Layers.WeaponViewIndex;
             int zombie = Layers.ZombieIndex;
             int vent = Layers.VentIndex;
-            if (weaponView < 0 || zombie < 0 || vent < 0)
+            int player = Layers.PlayerIndex;
+            if (weaponView < 0 || zombie < 0 || vent < 0 || player < 0)
             {
                 throw new System.InvalidOperationException("Layers were not created; run EnsureLayers first.");
             }
 
+            var ignored = new List<(int A, int B)>();
             for (int layer = 0; layer < 32; layer++)
             {
-                Physics.IgnoreLayerCollision(weaponView, layer, true);
+                ignored.Add((weaponView, layer));
             }
 
-            Physics.IgnoreLayerCollision(zombie, zombie, true);
-            Physics.IgnoreLayerCollision(zombie, vent, true);
+            ignored.Add((zombie, zombie));
+            ignored.Add((zombie, vent));
+            ignored.Add((zombie, player));
 
-            // Physics.IgnoreLayerCollision updates the live matrix; write the serialized matrix too so
-            // the change is guaranteed to reach DynamicsManager.asset in a headless -quit run.
+            foreach ((int a, int b) in ignored)
+            {
+                Physics.IgnoreLayerCollision(a, b, true);
+            }
+
+            // Persist to DynamicsManager so a headless -quit run writes the change to disk.
+            // A set bit means "these layers collide"; start from all-collide and clear the ignored pairs.
             Object dynamics = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/DynamicsManager.asset")[0];
             var so = new SerializedObject(dynamics);
             SerializedProperty matrix = so.FindProperty("m_LayerCollisionMatrix");
             if (matrix != null && matrix.arraySize == 32)
             {
+                var rows = new uint[32];
                 for (int i = 0; i < 32; i++)
                 {
-                    SerializedProperty row = matrix.GetArrayElementAtIndex(i);
-                    uint bits = row.uintValue;
-                    bits &= ~(1u << weaponView);
-                    if (i == weaponView)
-                    {
-                        bits = 0u;
-                    }
+                    rows[i] = 0xFFFFFFFFu;
+                }
 
-                    if (i == zombie)
-                    {
-                        bits &= ~(1u << zombie);
-                        bits &= ~(1u << vent);
-                    }
+                foreach ((int a, int b) in ignored)
+                {
+                    rows[a] &= ~(1u << b);
+                    rows[b] &= ~(1u << a);
+                }
 
-                    if (i == vent)
-                    {
-                        bits &= ~(1u << zombie);
-                    }
-
-                    row.uintValue = bits;
+                for (int i = 0; i < 32; i++)
+                {
+                    matrix.GetArrayElementAtIndex(i).uintValue = rows[i];
                 }
 
                 so.ApplyModifiedPropertiesWithoutUndo();

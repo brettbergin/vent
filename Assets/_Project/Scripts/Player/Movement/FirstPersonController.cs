@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.AI;
 using Vent.Core.Utility;
 using Vent.Player.Input;
 
@@ -43,12 +44,24 @@ namespace Vent.Player.Movement
         [SerializeField, Tooltip("Small downward force while grounded keeps the controller snapped to slopes and stairs.")]
         private float groundedStickVelocity = -2f;
 
+        [Header("Containment")]
+        [SerializeField, Tooltip("Snap the player back onto the NavMesh if they ever end up outside the building. A safety net; the collision matrix already stops zombies from pushing the player through walls.")]
+        private bool containmentEnabled = true;
+        [SerializeField, Min(0.5f), Tooltip("While grounded within this distance of the NavMesh, the position is remembered as safe.")]
+        private float navSampleRadius = 1.2f;
+        [SerializeField, Min(0.5f), Tooltip("Farther than this from any NavMesh counts as \"outside\" and triggers a snap-back. Kept above jump height to avoid false positives mid-air.")]
+        private float escapeDistance = 2.5f;
+        [SerializeField, Tooltip("Falling below this world Y also triggers a snap-back (fell out of the world).")]
+        private float killFloorY = -8f;
+
         private CharacterController controller;
         private Vector3 horizontalVelocity;
         private float verticalVelocity;
         private float lastGroundedTime = float.NegativeInfinity;
         private float jumpRequestedTime = float.NegativeInfinity;
         private bool movementEnabled = true;
+        private Vector3 lastSafePosition;
+        private bool hasSafePosition;
 
         /// <summary>World-space velocity from the last move, including vertical.</summary>
         public Vector3 Velocity => horizontalVelocity + Vector3.up * verticalVelocity;
@@ -65,7 +78,12 @@ namespace Vent.Player.Movement
             set => input = value;
         }
 
-        private void Awake() => controller = GetComponent<CharacterController>();
+        private void Awake()
+        {
+            controller = GetComponent<CharacterController>();
+            lastSafePosition = transform.position;
+            hasSafePosition = true;
+        }
 
         private void OnEnable()
         {
@@ -101,6 +119,8 @@ namespace Vent.Player.Movement
             controller.enabled = true;
             horizontalVelocity = Vector3.zero;
             verticalVelocity = 0f;
+            lastSafePosition = position;
+            hasSafePosition = true;
         }
 
         private void OnJumpPressed() => jumpRequestedTime = Time.time;
@@ -148,6 +168,37 @@ namespace Vent.Player.Movement
             }
 
             controller.Move((horizontalVelocity + Vector3.up * verticalVelocity) * dt);
+
+            if (containmentEnabled)
+            {
+                ContainWithinNavMesh();
+            }
+        }
+
+        /// <summary>
+        /// Keeps the player inside the sealed building. While grounded on (or near) the NavMesh the
+        /// current position is remembered; if the player is ever found far from any NavMesh or below
+        /// the world, they are snapped back to the last remembered position. This is a safety net —
+        /// the collision matrix already prevents zombies from shoving the controller through a wall —
+        /// so in normal play it never fires.
+        /// </summary>
+        private void ContainWithinNavMesh()
+        {
+            Vector3 feet = transform.position;
+
+            if (IsGrounded && NavMesh.SamplePosition(feet, out _, navSampleRadius, NavMesh.AllAreas))
+            {
+                lastSafePosition = feet;
+                hasSafePosition = true;
+                return;
+            }
+
+            bool escaped = feet.y < killFloorY
+                           || !NavMesh.SamplePosition(feet, out _, escapeDistance, NavMesh.AllAreas);
+            if (escaped && hasSafePosition)
+            {
+                Teleport(lastSafePosition, transform.rotation);
+            }
         }
     }
 }

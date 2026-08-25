@@ -118,6 +118,10 @@ MonoBehaviour:
   coyoteTime: 0.12
   jumpBufferTime: 0.12
   groundedStickVelocity: -2
+  containmentEnabled: 1
+  navSampleRadius: 1.2
+  escapeDistance: 2.5
+  killFloorY: -8
 --- !u!114 &7327998345888030114
 MonoBehaviour:
   m_ObjectHideFlags: 0
