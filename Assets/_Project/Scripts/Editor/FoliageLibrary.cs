@@ -163,19 +163,41 @@ namespace Vent.Editor
                 {
                     var cell = new Rect(area.xMin + cx * chunk, area.yMin + cz * chunk, Mathf.Min(chunk, area.xMax - (area.xMin + cx * chunk)), Mathf.Min(chunk, area.yMax - (area.yMin + cz * chunk)));
                     var centre = new Vector3(cell.center.x, 0f, cell.center.y);
-                    string chunkKey = $"{key}_{cx}_{cz}";
+
+                    // A chunk with nothing carved out of it is just grass, and grass is grass: it can share
+                    // one of a few interior meshes instead of baking its own ~330 KB asset. Only chunks a
+                    // path or bed actually cuts into need a bespoke one. Lawns dominated the mesh folder
+                    // before this. The probe grid is independent of the tuft RNG and finer than any path.
+                    bool carved = cell.width < chunk - 0.01f || cell.height < chunk - 0.01f;
+                    if (!carved && keepOut != null)
+                    {
+                        for (int py = 0; py <= 12 && !carved; py++)
+                        {
+                            for (int px = 0; px <= 12 && !carved; px++)
+                            {
+                                carved = keepOut(new Vector2(cell.xMin + px / 12f * cell.width, cell.yMin + py / 12f * cell.height));
+                            }
+                        }
+                    }
+
+                    string chunkKey = carved
+                        ? $"{key}_{cx}_{cz}"
+                        : $"Lawn_Fill_{Quantize(spacing)}_{Mathf.Abs((cx * 73 + cz * 31) % 6)}";
+                    float yaw = carved ? 0f : Mathf.Abs((cx * 17 + cz * 43) % 4) * 90f;
+                    Rect build = carved ? cell : new Rect(-chunk / 2f, -chunk / 2f, chunk, chunk);
+                    Vector3 buildCentre = carved ? centre : Vector3.zero;
                     Mesh mesh = GetMesh(chunkKey, mb =>
                     {
                         var rng = new System.Random(chunkKey.GetHashCode());
-                        int n = Mathf.Max(1, Mathf.RoundToInt(cell.width / spacing)), m = Mathf.Max(1, Mathf.RoundToInt(cell.height / spacing));
+                        int n = Mathf.Max(1, Mathf.RoundToInt(build.width / spacing)), m = Mathf.Max(1, Mathf.RoundToInt(build.height / spacing));
                         for (int iz = 0; iz < m; iz++)
                         {
                             for (int ix = 0; ix < n; ix++)
                             {
                                 if (rng.NextDouble() < 0.1) continue; // worn patches
-                                var p = new Vector2(cell.xMin + (ix + Rand(rng, 0.15f, 0.85f)) / n * cell.width, cell.yMin + (iz + Rand(rng, 0.15f, 0.85f)) / m * cell.height);
-                                if (keepOut != null && keepOut(p)) continue;
-                                Tuft(mb, rng, new Vector3(p.x, 0f, p.y) - centre, Rand(rng, 0.16f, 0.32f), Rand(rng, 0.3f, 0.5f), Cell.Grass);
+                                var p = new Vector2(build.xMin + (ix + Rand(rng, 0.15f, 0.85f)) / n * build.width, build.yMin + (iz + Rand(rng, 0.15f, 0.85f)) / m * build.height);
+                                if (carved && keepOut != null && keepOut(p)) continue;
+                                Tuft(mb, rng, new Vector3(p.x, 0f, p.y) - buildCentre, Rand(rng, 0.16f, 0.32f), Rand(rng, 0.3f, 0.5f), Cell.Grass);
                             }
                         }
                     });
@@ -184,7 +206,7 @@ namespace Vent.Editor
                         continue;
                     }
 
-                    Foliage(root.transform, mesh, a.Foliage, centre, 0f, castShadows: false);
+                    Foliage(root.transform, mesh, a.Foliage, centre, yaw, castShadows: false);
                 }
             }
 

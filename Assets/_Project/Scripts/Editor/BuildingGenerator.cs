@@ -529,6 +529,7 @@ namespace Vent.Editor
 
             edges.Add(full / 2f);
             edges.Sort();
+            var piers = new List<(float a0, float a1)>();
             for (int i = 0; i < edges.Count; i += 2)
             {
                 float a0 = edges[i], a1 = edges[i + 1];
@@ -537,6 +538,7 @@ namespace Vent.Editor
                     continue;
                 }
 
+                piers.Add((a0, a1));
                 Block(wall, $"Pier{i / 2}", center + along * ((a0 + a1) / 2f) + Vector3.up * ((sill + top) / 2f), Size(a1 - a0, top - sill), a.Wall);
             }
 
@@ -548,35 +550,58 @@ namespace Vent.Editor
 
             if (rng != null && foliage != null)
             {
-                IvyAlong(foliage, a, rng, center, along, -inward, thickness, full, door ? doorWidth : 0f);
+                IvyAlong(foliage, a, rng, center, along, -inward, thickness, door ? doorWidth : 0f, piers, height);
             }
         }
 
         /// <summary>
-        /// Ivy on the outer face of a wall: nobody has trimmed it for a while. A few patches along the
-        /// base, some sending runners up between the windows, none across the entrance.
+        /// Ivy on the outer face of a wall: nobody has trimmed it for a while. It climbs the solid piers
+        /// between the windows, never across the glass and never across the entrance. Ivy laid along the
+        /// base regardless of what was behind it read as a hedge parked against the building, and it sat
+        /// over the window sills.
         /// </summary>
-        private static void IvyAlong(Transform parent, GameAssets a, System.Random rng, Vector3 wallCenter, Vector3 along, Vector3 outward, float thickness, float length, float keepClear)
+        private static void IvyAlong(Transform parent, GameAssets a, System.Random rng, Vector3 wallCenter, Vector3 along, Vector3 outward, float thickness, float keepClear, List<(float a0, float a1)> piers, float wallHeight)
         {
-            int patches = rng.NextDouble() < 0.3 ? 0 : 1 + rng.Next(3);
-            for (int p = 0; p < patches; p++)
+            // A pier has to be wide enough to carry a tile; the tile's own edges thin out, so a little
+            // overhang onto the jamb is fine, a tile centred on glass is not.
+            var usable = new List<(float a0, float a1)>();
+            foreach ((float a0, float a1) in piers)
             {
-                float height = Rand(rng, 0.7f, 1.7f);
-                int tiles = 1 + rng.Next(3);
-                float span = tiles * FoliageLibrary.IvyTileWidth * 0.85f;
-                float start = Rand(rng, -length / 2f + 0.8f, length / 2f - 0.8f - span);
-                for (int i = 0; i < tiles; i++)
+                if (a1 - a0 < FoliageLibrary.IvyTileWidth * 0.55f)
                 {
-                    float offset = start + (i + 0.5f) * FoliageLibrary.IvyTileWidth * 0.85f;
-                    if (keepClear > 0f && Mathf.Abs(offset) < keepClear / 2f + 1.6f)
-                    {
-                        continue;
-                    }
-
-                    GameObject ivy = FoliageLibrary.IvyTile(parent, a, rng, height * Rand(rng, 0.85f, 1.15f), rng.Next(6));
-                    ivy.transform.SetPositionAndRotation(wallCenter + along * offset + outward * (thickness / 2f), Quaternion.LookRotation(outward, Vector3.up));
-                    StreetPropLibrary.MarkExterior(ivy);
+                    continue;
                 }
+
+                float centreAlong = (a0 + a1) / 2f;
+                if (keepClear > 0f && Mathf.Abs(centreAlong) < keepClear / 2f + 1.6f)
+                {
+                    continue;
+                }
+
+                usable.Add((a0, a1));
+            }
+
+            if (usable.Count == 0)
+            {
+                return;
+            }
+
+            int patches = rng.NextDouble() < 0.3 ? 0 : 1 + rng.Next(3);
+            var taken = new HashSet<int>();
+            for (int p = 0; p < patches && taken.Count < usable.Count; p++)
+            {
+                int pick = rng.Next(usable.Count);
+                while (!taken.Add(pick))
+                {
+                    pick = (pick + 1) % usable.Count;
+                }
+
+                (float a0, float a1) = usable[pick];
+                // Most of the way up the pier: enough to read as a climb, short of the parapet.
+                float height = Rand(rng, wallHeight * 0.45f, wallHeight * 0.8f);
+                GameObject ivy = FoliageLibrary.IvyTile(parent, a, rng, height, rng.Next(6));
+                ivy.transform.SetPositionAndRotation(wallCenter + along * ((a0 + a1) / 2f) + outward * (thickness / 2f), Quaternion.LookRotation(outward, Vector3.up));
+                StreetPropLibrary.MarkExterior(ivy);
             }
         }
 
