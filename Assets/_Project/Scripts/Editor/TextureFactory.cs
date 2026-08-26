@@ -110,6 +110,105 @@ namespace Vent.Editor
             return (new Color(g, g, g), 0.5f + weave * 2f);
         });
 
+        // ------------------------------------------------------------------ the district
+
+        public static TextureSet Brick() => Make("Brick", metersPerTile: 1f, normalStrength: 1.0f, (x, y, n) =>
+        {
+            // Running bond: 4 bricks × 12 courses per metre, every other course offset half a brick.
+            int course = Mathf.FloorToInt(y * 12f);
+            float u = Frac(x * 4f + (course % 2 == 0 ? 0f : 0.5f)), v = Frac(y * 12f);
+            bool mortar = u < 0.06f || v < 0.09f;
+            int bx = Mathf.FloorToInt(x * 4f + (course % 2 == 0 ? 0f : 0.5f));
+            float tone = n.Hash(bx, course) * 0.16f - 0.08f;
+            float grit = n.Fbm(x, y, 40, 40, 2) * 0.06f;
+            float h = mortar ? 0.25f : 0.62f + grit;
+            Color c = mortar ? new Color(0.78f, 0.76f, 0.72f) : new Color(0.82f + tone, 0.72f + tone * 0.8f, 0.66f + tone * 0.6f);
+            return (c, h);
+        });
+
+        public static TextureSet Stucco() => Make("Stucco", metersPerTile: 2f, normalStrength: 0.6f, (x, y, n) =>
+        {
+            float bumps = n.Fbm(x, y, 30, 30, 3) * 0.14f;
+            float stain = n.Fbm(x, y, 3, 6, 2) * 0.06f;
+            float g = 0.86f + bumps - stain;
+            return (new Color(g, g * 0.99f, g * 0.96f), 0.45f + bumps);
+        });
+
+        public static TextureSet MetalPanel() => Make("MetalPanel", metersPerTile: 1f, normalStrength: 1.1f, (x, y, n) =>
+        {
+            // Vertical corrugation every 10 cm, faint rust streaks running down.
+            float rib = Mathf.Abs(Frac(x * 10f) - 0.5f) * 2f;
+            float streak = n.Fbm(x, y, 12, 2, 2) * 0.08f;
+            float g = 0.80f - rib * 0.08f - streak;
+            return (new Color(g, g, g * 1.02f), 0.35f + rib * 0.4f);
+        });
+
+        public static TextureSet Pavers() => Make("Pavers", metersPerTile: 1.5f, normalStrength: 0.9f, (x, y, n) =>
+        {
+            // 50 cm concrete pavers with scored joints; each a little different.
+            float u = Frac(x * 3f), v = Frac(y * 3f);
+            int px = Mathf.FloorToInt(x * 3f), py = Mathf.FloorToInt(y * 3f);
+            float edge = Mathf.Min(Mathf.Min(u, 1f - u), Mathf.Min(v, 1f - v));
+            bool joint = edge < 0.03f;
+            float tone = n.Hash(px, py) * 0.12f - 0.06f;
+            float grit = n.Fbm(x, y, 45, 45, 2) * 0.06f;
+            float g = 0.72f + tone + grit;
+            return (joint ? new Color(0.42f, 0.42f, 0.43f) : new Color(g, g, g * 0.98f), joint ? 0.3f : 0.55f + grit);
+        });
+
+        public static TextureSet Grass() => Make("Grass", metersPerTile: 2f, normalStrength: 0.7f, (x, y, n) =>
+        {
+            float blades = n.Fbm(x, y, 60, 60, 3);
+            float patches = n.Fbm(x, y, 4, 4, 2);
+            float g = 0.55f + blades * 0.35f;
+            var c = new Color(g * (0.55f + patches * 0.25f), g, g * 0.45f);
+            return (c, 0.4f + blades * 0.4f);
+        });
+
+        public static TextureSet Dirt() => Make("Dirt", metersPerTile: 2f, normalStrength: 0.8f, (x, y, n) =>
+        {
+            float clods = n.Fbm(x, y, 20, 20, 3);
+            float ruts = Mathf.Abs(Mathf.Sin(y * 6f * Mathf.PI)) * n.Fbm(x, y, 2, 2, 1) * 0.12f;
+            float g = 0.62f + clods * 0.25f - ruts;
+            return (new Color(g, g * 0.86f, g * 0.7f), 0.4f + clods * 0.4f - ruts);
+        });
+
+        // ------------------------------------------------------------------ nature
+
+        public static TextureSet Bark() => Make("Bark", metersPerTile: 1f, normalStrength: 1.2f, (x, y, n) =>
+        {
+            // Vertical ridges and deep fissures, the plates between them a little lighter and lichen-flecked.
+            float ridges = n.Fbm(x, y, 16, 3, 3);
+            float fissure = n.Fbm(x + 0.37f, y, 9, 2, 2);
+            float f = Mathf.SmoothStep(0.56f, 0.74f, fissure);
+            float lichen = n.Fbm(x, y, 7, 7, 2) > 0.66f ? 0.08f : 0f;
+            float g = 0.62f + ridges * 0.25f - f * 0.35f;
+            var c = new Color(g + lichen * 0.3f, g * 0.86f + lichen, g * 0.7f + lichen * 0.6f);
+            return (c, 0.5f + ridges * 0.35f - f * 0.45f);
+        });
+
+        public static TextureSet Birch() => Make("Birch", metersPerTile: 1f, normalStrength: 0.9f, (x, y, n) =>
+        {
+            // Chalk-white bark with black horizontal lenticels and the odd dark scar.
+            float grain = n.Fbm(x, y, 3, 30, 3) * 0.08f;
+            float lent = n.Fbm(x, y * 3f, 40, 4, 2);
+            bool lenticel = lent > 0.68f && Frac(y * 9f) < 0.35f;
+            float scar = n.Fbm(x, y, 4, 4, 2) > 0.78f ? 0.5f : 0f;
+            float g = 0.86f + grain - scar;
+            if (lenticel) g -= 0.5f;
+            return (new Color(g, g * 0.98f, g * 0.94f), lenticel ? 0.35f : 0.55f + grain - scar * 0.3f);
+        });
+
+        public static TextureSet Mulch() => Make("Mulch", metersPerTile: 0.6f, normalStrength: 1.1f, (x, y, n) =>
+        {
+            // Bark chips: small dark flakes over damp soil.
+            float chips = n.Fbm(x, y, 22, 22, 3);
+            float chip = Mathf.SmoothStep(0.5f, 0.62f, chips);
+            float damp = n.Fbm(x, y, 5, 5, 2) * 0.12f;
+            float g = 0.30f + chip * 0.28f - damp;
+            return (new Color(g * 1.05f, g * 0.78f, g * 0.55f), 0.35f + chip * 0.45f);
+        });
+
         // ------------------------------------------------------------------ sprites (RGBA, clamped)
 
         /// <summary>Muzzle flash: a white-hot core, an orange corona and eight ragged spikes.</summary>
@@ -228,9 +327,19 @@ namespace Vent.Editor
         }
 
         private static Texture2D Write(string name, Color[] pixels, bool isNormal)
+            => WriteImage(name, pixels, Size, isNormal, hasAlpha: false, clamp: false);
+
+        /// <summary>
+        /// Encode <paramref name="pixels"/> as a PNG at <c>Textures/name.png</c> (only rewriting it when the bytes
+        /// change, so a regeneration that produces the same art does not churn the repository) and set its import
+        /// settings. Cutout art passes a <paramref name="coverageCutoff"/>: the importer then rescales every
+        /// mip's alpha so the same fraction of texels survives the alpha test at any distance, which is what
+        /// keeps a tree's canopy from thinning to twigs a hundred metres away.
+        /// </summary>
+        public static Texture2D WriteImage(string name, Color[] pixels, int size, bool isNormal, bool hasAlpha, bool clamp, float coverageCutoff = -1f)
         {
             string path = $"{Paths.Textures}/{name}.png";
-            var tex = new Texture2D(Size, Size, TextureFormat.RGB24, false, linear: isNormal);
+            var tex = new Texture2D(size, size, hasAlpha ? TextureFormat.RGBA32 : TextureFormat.RGB24, false, linear: isNormal);
             tex.SetPixels(pixels);
             tex.Apply();
             byte[] png = tex.EncodeToPNG();
@@ -247,11 +356,17 @@ namespace Vent.Editor
             var importer = (TextureImporter)AssetImporter.GetAtPath(path);
             bool dirty = false;
             TextureImporterType type = isNormal ? TextureImporterType.NormalMap : TextureImporterType.Default;
+            TextureWrapMode wrap = clamp ? TextureWrapMode.Clamp : TextureWrapMode.Repeat;
+            bool coverage = coverageCutoff >= 0f;
             if (importer.textureType != type) { importer.textureType = type; dirty = true; }
-            if (importer.wrapMode != TextureWrapMode.Repeat) { importer.wrapMode = TextureWrapMode.Repeat; dirty = true; }
+            if (importer.wrapMode != wrap) { importer.wrapMode = wrap; dirty = true; }
             if (importer.anisoLevel != 8) { importer.anisoLevel = 8; dirty = true; }
             if (importer.sRGBTexture != !isNormal) { importer.sRGBTexture = !isNormal; dirty = true; }
             if (!importer.mipmapEnabled) { importer.mipmapEnabled = true; dirty = true; }
+            if (importer.alphaIsTransparency != hasAlpha) { importer.alphaIsTransparency = hasAlpha; dirty = true; }
+            if (importer.mipMapsPreserveCoverage != coverage) { importer.mipMapsPreserveCoverage = coverage; dirty = true; }
+            if (coverage && Mathf.Abs(importer.alphaTestReferenceValue - coverageCutoff) > 0.001f) { importer.alphaTestReferenceValue = coverageCutoff; dirty = true; }
+            if (importer.maxTextureSize < size) { importer.maxTextureSize = size; dirty = true; }
             if (dirty)
             {
                 importer.SaveAndReimport();

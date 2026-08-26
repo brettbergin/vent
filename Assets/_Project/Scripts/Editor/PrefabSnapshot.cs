@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -66,6 +67,140 @@ namespace Vent.Editor
             Debug.Log("[Vent] Player view snapshots written to Logs/snapshot-Player_*.png");
         }
 
+        /// <summary>The street outside the front door, the hero car, an avenue, and the whole district from the air.</summary>
+        [MenuItem("Vent/Snapshot District")]
+        public static void SnapshotDistrict()
+        {
+            EditorSceneManager.OpenScene(Paths.BuildingScene, OpenSceneMode.Single);
+            // The scene is saved with the indoor haze; outdoors the Atmosphere thins it at runtime. Do the same here (not saved).
+            RenderSettings.fogDensity = 0.0032f;
+            RenderSettings.fogColor = new Color(0.26f, 0.16f, 0.18f);
+            RenderSettings.ambientSkyColor = new Color(0.50f, 0.40f, 0.46f);
+            RenderSettings.ambientEquatorColor = new Color(0.34f, 0.24f, 0.26f);
+            var camGo = new GameObject("SnapshotCamera");
+            var cam = camGo.AddComponent<Camera>();
+            cam.fieldOfView = 70f;
+            cam.GetUniversalAdditionalCameraData().renderPostProcessing = true;
+            cam.nearClipPlane = 0.1f;
+            cam.farClipPlane = 700f;
+            cam.clearFlags = CameraClearFlags.Skybox;
+            Directory.CreateDirectory("Logs");
+            const int w = 1200, h = 800;
+            var rt = new RenderTexture(w, h, 24);
+            var tex = new Texture2D(w, h, TextureFormat.RGB24, false);
+            (string name, Vector3 from, Vector3 at)[] shots =
+            {
+                ("door", new Vector3(31.5f, 1.6f, 0f), new Vector3(60f, 1.2f, 0f)),
+                ("herocar", new Vector3(44f, 1.7f, 9f), new Vector3(36.5f, 0.6f, 0f)),
+                ("avenue", new Vector3(62f, 1.6f, -80f), new Vector3(62f, 1.4f, 60f)),
+                ("plaza", new Vector3(-20f, 2f, 40f), new Vector3(20f, 1f, 80f)),
+                ("aerial", new Vector3(60f, 110f, -170f), new Vector3(0f, 0f, 0f)),
+            };
+            foreach ((string name, Vector3 from, Vector3 at) in shots)
+            {
+                cam.transform.position = from;
+                cam.transform.LookAt(at);
+                cam.targetTexture = rt;
+                cam.Render();
+                RenderTexture.active = rt;
+                tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+                tex.Apply();
+                RenderTexture.active = null;
+                cam.targetTexture = null;
+                File.WriteAllBytes(Path.Combine("Logs", $"snapshot-District_{name}.png"), tex.EncodeToPNG());
+            }
+
+            Object.DestroyImmediate(tex);
+            Object.DestroyImmediate(rt);
+            Object.DestroyImmediate(camGo);
+            Debug.Log("[Vent] District snapshots written to Logs/snapshot-District_*.png");
+        }
+
+        /// <summary>
+        /// The plants: a big lobby plant up close, a desk with its plant, the park from its path, a
+        /// street tree on the avenue, and the ivy on the office wall.
+        /// </summary>
+        [MenuItem("Vent/Snapshot Nature")]
+        public static void SnapshotNature()
+        {
+            Scene scene = EditorSceneManager.OpenScene(Paths.BuildingScene, OpenSceneMode.Single);
+            RenderSettings.fogDensity = 0.0032f;
+            RenderSettings.fogColor = new Color(0.26f, 0.16f, 0.18f);
+            RenderSettings.ambientSkyColor = new Color(0.50f, 0.40f, 0.46f);
+            RenderSettings.ambientEquatorColor = new Color(0.34f, 0.24f, 0.26f);
+            var camGo = new GameObject("SnapshotCamera");
+            var cam = camGo.AddComponent<Camera>();
+            cam.fieldOfView = 60f;
+            cam.GetUniversalAdditionalCameraData().renderPostProcessing = true;
+            cam.nearClipPlane = 0.05f;
+            cam.farClipPlane = 700f;
+            cam.clearFlags = CameraClearFlags.Skybox;
+            Directory.CreateDirectory("Logs");
+            const int w = 1200, h = 800;
+            var rt = new RenderTexture(w, h, 24);
+            var tex = new Texture2D(w, h, TextureFormat.RGB24, false);
+
+            var shots = new List<(string name, Vector3 from, Vector3 at)>();
+            Transform park = null, plantLarge = null, potted = null, desk = null, ivy = null, streetTree = null, pothos = null;
+            foreach (GameObject root in scene.GetRootGameObjects())
+            {
+                foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
+                {
+                    if (park == null && t.name.StartsWith("Park_")) park = t;
+                    if (plantLarge == null && t.name == "PlantLarge") plantLarge = t;
+                    if (potted == null && t.name == "PottedPlant") potted = t;
+                    if (desk == null && t.name == "Desk" && t.Find("DeskPlant") != null) desk = t;
+                    if (pothos == null && t.name == "Pothos") pothos = t;
+                    if (ivy == null && t.name == "Ivy" && t.parent != null && t.parent.name == "Foliage" && t.parent.parent != null && t.parent.parent.name == "Building") ivy = t;
+                    if (streetTree == null && t.name == "StreetTree") streetTree = t;
+                }
+            }
+
+            void Frame(string name, Transform target, Vector3 offset, float lookHeight)
+            {
+                if (target == null)
+                {
+                    Debug.LogWarning($"[Vent] Snapshot Nature: no {name} in the scene.");
+                    return;
+                }
+
+                Vector3 at = target.position + Vector3.up * lookHeight;
+                shots.Add((name, at + target.TransformDirection(offset), at));
+            }
+
+            Frame("plant_large", plantLarge, new Vector3(0.9f, 0.9f, 2.2f), 0.9f);
+            Frame("plant_potted", potted, new Vector3(-0.8f, 0.6f, 1.6f), 0.5f);
+            Frame("desk", desk, new Vector3(-0.9f, 0.9f, 1.6f), 0.75f);
+            Frame("pothos", pothos, new Vector3(0.3f, 0.2f, 1.4f), -0.1f);
+            Frame("ivy", ivy, new Vector3(2.5f, 1.3f, 5f), 0.9f);
+            Frame("street_tree", streetTree, new Vector3(6f, 1.4f, 9f), 3.5f);
+            if (park != null)
+            {
+                Vector3 c = park.position;
+                shots.Add(("park", c + park.TransformDirection(new Vector3(0f, 1.6f, -16f)), c + Vector3.up * 1.2f));
+                shots.Add(("park_lawn", c + park.TransformDirection(new Vector3(7f, 1.4f, 7f)), c + park.TransformDirection(new Vector3(-6f, 0.6f, -6f))));
+            }
+
+            foreach ((string name, Vector3 from, Vector3 at) in shots)
+            {
+                cam.transform.position = from;
+                cam.transform.LookAt(at);
+                cam.targetTexture = rt;
+                cam.Render();
+                RenderTexture.active = rt;
+                tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+                tex.Apply();
+                RenderTexture.active = null;
+                cam.targetTexture = null;
+                File.WriteAllBytes(Path.Combine("Logs", $"snapshot-Nature_{name}.png"), tex.EncodeToPNG());
+            }
+
+            Object.DestroyImmediate(tex);
+            Object.DestroyImmediate(rt);
+            Object.DestroyImmediate(camGo);
+            Debug.Log($"[Vent] Nature snapshots written: {shots.Count} to Logs/snapshot-Nature_*.png");
+        }
+
         [MenuItem("Vent/Snapshot Rooms")]
         public static void SnapshotRooms()
         {
@@ -73,8 +208,9 @@ namespace Vent.Editor
             Transform props = null;
             foreach (GameObject root in scene.GetRootGameObjects())
             {
+                // The district has a Props root too; the rooms are the building's.
                 Transform found = root.transform.Find("Props");
-                if (found != null) props = found;
+                if (found != null && (props == null || root.name == "Building")) props = found;
             }
 
             if (props == null)

@@ -6,7 +6,9 @@
     "Vent.Player",
     "Vent.Weapons",
     "Vent.Enemies",
-    "Unity.InputSystem"
+    "Unity.InputSystem",
+    "Vent.Vehicles",
+    "Unity.RenderPipelines.Core.Runtime"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

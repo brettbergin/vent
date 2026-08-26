@@ -32,5 +32,8 @@ namespace Vent.Weapons
 
         /// <summary>World velocity, used for view-model bob and inertia.</summary>
         Vector3 Velocity { get; }
+
+        /// <summary>Physics layers the hitscan may hit right now (a driver must not shoot their own car).</summary>
+        int ShootMask { get; }
     }
 }

@@ -32,6 +32,8 @@ namespace Vent.UI.Screens
         private string bannerSub = string.Empty;
         private string toastText = string.Empty;
         private string perkText = string.Empty;
+        private string promptText = string.Empty;
+        private string speedText = string.Empty;
         private StyleFloat vignetteOpacity = 0f;
         private StyleFloat hitmarkerOpacity = 0f;
         private StyleFloat damageIndicatorOpacity = 0f;
@@ -55,6 +57,12 @@ namespace Vent.UI.Screens
 
         /// <summary>Active timed perks with their countdowns; empty when none.</summary>
         [CreateProperty] public string PerkText { get => perkText; set => Set(ref perkText, value); }
+
+        /// <summary>"[E]  OPEN DOOR" while looking at something usable; empty otherwise.</summary>
+        [CreateProperty] public string PromptText { get => promptText; set => Set(ref promptText, value); }
+
+        /// <summary>Speedometer while driving; empty on foot.</summary>
+        [CreateProperty] public string SpeedText { get => speedText; set => Set(ref speedText, value); }
         [CreateProperty] public StyleFloat VignetteOpacity { get => vignetteOpacity; set => Set(ref vignetteOpacity, value); }
         [CreateProperty] public StyleFloat HitmarkerOpacity { get => hitmarkerOpacity; set => Set(ref hitmarkerOpacity, value); }
         [CreateProperty] public StyleFloat DamageIndicatorOpacity { get => damageIndicatorOpacity; set => Set(ref damageIndicatorOpacity, value); }

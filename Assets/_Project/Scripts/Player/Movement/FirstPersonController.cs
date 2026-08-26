@@ -60,6 +60,7 @@ namespace Vent.Player.Movement
         private float lastGroundedTime = float.NegativeInfinity;
         private float jumpRequestedTime = float.NegativeInfinity;
         private bool movementEnabled = true;
+        private bool seated;
         private Vector3 lastSafePosition;
         private bool hasSafePosition;
 
@@ -111,6 +112,23 @@ namespace Vent.Player.Movement
             }
         }
 
+        /// <summary>
+        /// Sitting in a car: the controller is switched off so the parent (the seat) can carry the
+        /// transform, and locomotion and containment stop entirely — the road is not the NavMesh the
+        /// safety net expects. Standing up re-enables the controller; the driver then teleports.
+        /// </summary>
+        public void SetSeated(bool value)
+        {
+            seated = value;
+            controller.enabled = !value;
+            horizontalVelocity = Vector3.zero;
+            verticalVelocity = 0f;
+            if (value)
+            {
+                IsGrounded = true;
+            }
+        }
+
         /// <summary>Teleport safely: CharacterController ignores transform writes while enabled.</summary>
         public void Teleport(Vector3 position, Quaternion rotation)
         {
@@ -127,6 +145,11 @@ namespace Vent.Player.Movement
 
         private void Update()
         {
+            if (seated)
+            {
+                return;
+            }
+
             float dt = Time.deltaTime;
             float now = Time.time;
 

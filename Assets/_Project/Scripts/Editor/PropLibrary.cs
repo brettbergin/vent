@@ -16,6 +16,10 @@ namespace Vent.Editor
             Desk, OfficeChair, FilingCabinet, Bookshelf, WaterCooler, PottedPlant, ConferenceTable, VendingMachine,
             Couch, ReceptionCounter, ServerRack, Shelving, TrashBin, Whiteboard, Copier, CubicleWall,
             Poster, PaperScatter,
+            /// <summary>A floor-standing fig, palm or monstera in a big pot: the corner piece.</summary>
+            PlantLarge,
+            /// <summary>A hand-sized fern or snake plant for a desk or a counter.</summary>
+            DeskPlant,
         }
 
         /// <summary>Floor footprint (x = width across the front, y = depth), metres.</summary>
@@ -26,7 +30,9 @@ namespace Vent.Editor
             Kind.FilingCabinet => new Vector2(0.5f, 0.6f),
             Kind.Bookshelf => new Vector2(1.2f, 0.4f),
             Kind.WaterCooler => new Vector2(0.4f, 0.4f),
-            Kind.PottedPlant => new Vector2(0.5f, 0.5f),
+            Kind.PottedPlant => new Vector2(0.6f, 0.6f),
+            Kind.PlantLarge => new Vector2(1.0f, 1.0f),
+            Kind.DeskPlant => new Vector2(0.2f, 0.2f),
             Kind.ConferenceTable => new Vector2(3.2f, 1.2f),
             Kind.VendingMachine => new Vector2(0.9f, 0.8f),
             Kind.Couch => new Vector2(2.0f, 0.9f),
@@ -55,14 +61,16 @@ namespace Vent.Editor
             {
                 case Kind.Desk: Desk(t, a, rng); break;
                 case Kind.OfficeChair: OfficeChair(t, a); break;
-                case Kind.FilingCabinet: FilingCabinet(t, a); break;
+                case Kind.FilingCabinet: FilingCabinet(t, a, rng); break;
                 case Kind.Bookshelf: Bookshelf(t, a, rng); break;
                 case Kind.WaterCooler: WaterCooler(t, a); break;
                 case Kind.PottedPlant: PottedPlant(t, a, rng); break;
+                case Kind.PlantLarge: PlantLarge(t, a, rng); break;
+                case Kind.DeskPlant: DeskPlant(t, a, rng); break;
                 case Kind.ConferenceTable: ConferenceTable(t, a); break;
                 case Kind.VendingMachine: VendingMachine(t, a); break;
                 case Kind.Couch: Couch(t, a); break;
-                case Kind.ReceptionCounter: ReceptionCounter(t, a); break;
+                case Kind.ReceptionCounter: ReceptionCounter(t, a, rng); break;
                 case Kind.ServerRack: ServerRack(t, a, rng); break;
                 case Kind.Shelving: Shelving(t, a, rng); break;
                 case Kind.TrashBin: TrashBin(t, a); break;
@@ -118,6 +126,12 @@ namespace Vent.Editor
             {
                 Cyl(t, "Mug", new Vector3(0.2f, 0.81f, -0.15f), 0.04f, 0.05f, a.Paper, collider: false);
             }
+
+            if (rng.NextDouble() < 0.4)
+            {
+                // Someone's desk plant, on the corner the monitor leaves free.
+                DeskPlant(t, a, rng).transform.localPosition = new Vector3(0.62f, 0.76f, 0.26f);
+            }
         }
 
         private static void OfficeChair(Transform t, GameAssets a)
@@ -136,9 +150,16 @@ namespace Vent.Editor
             Box(t, "ArmR", new Vector3(0.26f, 0.65f, -0.02f), new Vector3(0.04f, 0.04f, 0.3f), a.Plastic, collider: false);
         }
 
-        private static void FilingCabinet(Transform t, GameAssets a)
+        private static void FilingCabinet(Transform t, GameAssets a, System.Random rng)
         {
             Box(t, "Body", new Vector3(0f, 0.66f, 0f), new Vector3(0.5f, 1.32f, 0.6f), a.MetalGrey);
+            if (rng.NextDouble() < 0.35)
+            {
+                // A pothos on top, trailing down the front.
+                FoliageLibrary.Pothos(t, a, rng, drop: Rand(rng, 0.45f, 0.8f), clearance: 0.14f, variant: rng.Next(4))
+                    .transform.localPosition = new Vector3(Rand(rng, -0.1f, 0.1f), 1.32f, 0.16f);
+            }
+
             for (int i = 0; i < 4; i++)
             {
                 Box(t, $"Drawer{i}", new Vector3(0f, 0.18f + i * 0.31f, 0.302f), new Vector3(0.44f, 0.27f, 0.004f), a.MetalDark, collider: false);
@@ -153,6 +174,12 @@ namespace Vent.Editor
             Box(t, "SideR", new Vector3(0.59f, 0.9f, 0f), new Vector3(0.02f, 1.8f, 0.4f), a.Wood);
             Box(t, "Back", new Vector3(0f, 0.9f, -0.19f), new Vector3(1.2f, 1.8f, 0.02f), a.Wood);
             Box(t, "Top", new Vector3(0f, 1.79f, 0f), new Vector3(1.2f, 0.02f, 0.4f), a.Wood);
+            if (rng.NextDouble() < 0.5)
+            {
+                FoliageLibrary.Pothos(t, a, rng, drop: Rand(rng, 0.6f, 1.0f), clearance: 0.12f, variant: rng.Next(4))
+                    .transform.localPosition = new Vector3(Rand(rng, -0.42f, 0.42f), 1.8f, 0.08f);
+            }
+
             for (int s = 0; s < 4; s++)
             {
                 float y = 0.02f + s * 0.44f;
@@ -185,22 +212,40 @@ namespace Vent.Editor
             Cyl(t, "Neck", new Vector3(0f, 1.02f, 0f), 0.06f, 0.03f, a.Glass, collider: false);
         }
 
+        /// <summary>A knee-high plant in a 38 cm pot: a monstera, fern, snake plant, small palm or young fig, one of four grown variants each.</summary>
         private static void PottedPlant(Transform t, GameAssets a, System.Random rng)
         {
-            Cyl(t, "Pot", new Vector3(0f, 0.2f, 0f), 0.2f, 0.2f, a.Terracotta);
-            Cyl(t, "Soil", new Vector3(0f, 0.395f, 0f), 0.17f, 0.005f, a.MetalDark, collider: false);
-            Cyl(t, "Stem", new Vector3(0f, 0.7f, 0f), 0.02f, 0.35f, a.Wood, collider: false);
-            int leaves = 5 + rng.Next(3);
-            for (int i = 0; i < leaves; i++)
+            (FoliageLibrary.Plant plant, float scale) = rng.Next(5) switch
             {
-                float ang = i * (360f / leaves) + (float)rng.NextDouble() * 20f;
-                Vector3 dir = Quaternion.Euler(0f, ang, 0f) * Vector3.forward;
-                GameObject leaf = Box(t, $"Leaf{i}", new Vector3(0f, 1.0f, 0f) + dir * 0.22f, new Vector3(0.12f, 0.03f, 0.45f), a.Plant, collider: false);
-                leaf.transform.localRotation = Quaternion.Euler(-35f - (float)rng.NextDouble() * 20f, ang, 0f);
-            }
-
-            Sphere(t, "Crown", new Vector3(0f, 1.1f, 0f), 0.22f, a.Plant, collider: false);
+                0 => (FoliageLibrary.Plant.Monstera, 0.9f),
+                1 => (FoliageLibrary.Plant.Fern, 1.0f),
+                2 => (FoliageLibrary.Plant.SnakePlant, 1.0f),
+                3 => (FoliageLibrary.Plant.Palm, 0.8f),
+                _ => (FoliageLibrary.Plant.FiddleFig, 0.7f),
+            };
+            FoliageLibrary.PottedPlant(t, "Plant", a, rng, plant, scale, potRadius: 0.19f, potHeight: 0.38f, PotMaterial(a, rng), rng.Next(4));
         }
+
+        /// <summary>A head-high floor plant in a 54 cm pot: the thing that stands in the corner of a lobby.</summary>
+        private static void PlantLarge(Transform t, GameAssets a, System.Random rng)
+        {
+            (FoliageLibrary.Plant plant, float scale) = rng.Next(3) switch
+            {
+                0 => (FoliageLibrary.Plant.FiddleFig, 1.05f),
+                1 => (FoliageLibrary.Plant.Palm, 1.25f),
+                _ => (FoliageLibrary.Plant.Monstera, 1.35f),
+            };
+            FoliageLibrary.PottedPlant(t, "Plant", a, rng, plant, scale, potRadius: 0.27f, potHeight: 0.5f, PotMaterial(a, rng), rng.Next(4));
+        }
+
+        /// <summary>A hand-sized fern or snake plant in a 12 cm pot; the desk and counter builders place it on their tops.</summary>
+        private static GameObject DeskPlant(Transform t, GameAssets a, System.Random rng)
+        {
+            (FoliageLibrary.Plant plant, float scale) = rng.NextDouble() < 0.5 ? (FoliageLibrary.Plant.Fern, 0.32f) : (FoliageLibrary.Plant.SnakePlant, 0.38f);
+            return FoliageLibrary.PottedPlant(t, "DeskPlant", a, rng, plant, scale, potRadius: 0.06f, potHeight: 0.1f, PotMaterial(a, rng), rng.Next(4));
+        }
+
+        private static Material PotMaterial(GameAssets a, System.Random rng) => rng.Next(4) switch { 0 => a.Ceramic, 1 => a.CeramicDark, _ => a.Terracotta };
 
         private static void ConferenceTable(Transform t, GameAssets a)
         {
@@ -241,7 +286,7 @@ namespace Vent.Editor
             Box(t, "CushionR", new Vector3(0.45f, 0.52f, 0.1f), new Vector3(0.85f, 0.06f, 0.7f), a.FabricLight, collider: false);
         }
 
-        private static void ReceptionCounter(Transform t, GameAssets a)
+        private static void ReceptionCounter(Transform t, GameAssets a, System.Random rng)
         {
             Box(t, "Front", new Vector3(0f, 0.55f, 0.3f), new Vector3(2.6f, 1.1f, 0.06f), a.Wood);
             Box(t, "Ledge", new Vector3(0f, 1.12f, 0.3f), new Vector3(2.7f, 0.04f, 0.3f), a.MetalGrey);
@@ -250,6 +295,10 @@ namespace Vent.Editor
             Box(t, "Monitor", new Vector3(-0.6f, 1.0f, -0.1f), new Vector3(0.45f, 0.3f, 0.03f), a.Plastic, collider: false);
             Box(t, "Screen", new Vector3(-0.6f, 1.0f, -0.083f), new Vector3(0.4f, 0.25f, 0.005f), a.Screen, collider: false);
             Box(t, "Phone", new Vector3(0.5f, 0.79f, -0.1f), new Vector3(0.2f, 0.05f, 0.18f), a.Plastic, collider: false);
+            if (rng.NextDouble() < 0.7)
+            {
+                DeskPlant(t, a, rng).transform.localPosition = new Vector3(1.0f, 1.14f, 0.3f);
+            }
         }
 
         private static void ServerRack(Transform t, GameAssets a, System.Random rng)

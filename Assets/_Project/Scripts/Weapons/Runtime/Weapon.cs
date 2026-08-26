@@ -64,6 +64,28 @@ namespace Vent.Weapons.Runtime
 
         private WeaponContext ctx;
         private WeaponViewModel viewModel;
+        private Transform remoteMuzzle;
+        private Transform remotePort;
+
+        /// <summary>Raised after every shot with the recoil ramp (1 = first shot, more under sustained fire).</summary>
+        public event System.Action<float> Fired;
+
+        /// <summary>
+        /// Fire from somewhere other than the first-person view-model: the pistol out of a car window.
+        /// The view-model is hidden while a remote muzzle is set (the overlay camera is off anyway) and
+        /// the flash, tracer and brass come from the given transforms. Null restores the view-model.
+        /// </summary>
+        public void SetRemoteMuzzle(Transform muzzle, Transform ejectionPort)
+        {
+            remoteMuzzle = muzzle;
+            remotePort = ejectionPort;
+            if (viewModel != null)
+            {
+                viewModel.gameObject.SetActive(muzzle == null);
+            }
+        }
+
+        private Transform Muzzle => remoteMuzzle != null ? remoteMuzzle : viewModel != null ? viewModel.Muzzle : transform;
         private Cooldown fireCooldown;
         private float stateTimer;
         private float stateDuration;
@@ -141,6 +163,11 @@ namespace Vent.Weapons.Runtime
         public void Draw()
         {
             gameObject.SetActive(true);
+            if (viewModel != null)
+            {
+                viewModel.gameObject.SetActive(remoteMuzzle == null);
+            }
+
             State = WeaponState.Drawing;
             stateTimer = Definition.DrawSeconds;
             triggerPulled = false;
@@ -162,6 +189,8 @@ namespace Vent.Weapons.Runtime
                 effect.Release();
             }
 
+            remoteMuzzle = null;
+            remotePort = null;
             gameObject.SetActive(false);
         }
 
@@ -406,6 +435,7 @@ namespace Vent.Weapons.Runtime
                 Random.Range(Definition.HorizontalKickRange.x, Definition.HorizontalKickRange.y)) * recoilScale;
             ctx.Recoil?.AddRecoil(kick);
             viewModel?.OnShot(ramp, Magazine == 0);
+            Fired?.Invoke(ramp);
 
             // Hitscan.
             Ray aim = ctx.Holder?.AimRay ?? new Ray(transform.position, transform.forward);
@@ -414,7 +444,8 @@ namespace Vent.Weapons.Runtime
             Vector3 endPoint = aim.origin + direction * range;
 
             bool hitSomething = false;
-            if (Physics.Raycast(aim.origin, direction, out RaycastHit hit, range, Layers.ShootableMask, QueryTriggerInteraction.Ignore))
+            int mask = ctx.Holder?.ShootMask ?? Layers.ShootableMask;
+            if (Physics.Raycast(aim.origin, direction, out RaycastHit hit, range, mask, QueryTriggerInteraction.Ignore))
             {
                 endPoint = hit.point;
                 hitSomething = ApplyHit(hit, direction);
@@ -473,19 +504,19 @@ namespace Vent.Weapons.Runtime
                 return;
             }
 
-            Transform muzzle = viewModel != null ? viewModel.Muzzle : transform;
+            Transform muzzle = Muzzle;
             var flash = ctx.Pools.Spawn<MuzzleFlash>(Definition.MuzzleFlashPrefab, muzzle.position, muzzle.rotation);
-            flash?.Play(muzzle, Definition.MuzzleFlashScale);
+            flash?.Play(muzzle, Definition.MuzzleFlashScale, firstPerson: remoteMuzzle == null);
         }
 
         private void SpawnShellCasing()
         {
-            if (Definition.ShellCasingPrefab == null || ctx.Pools == null || viewModel == null)
+            Transform port = remotePort != null ? remotePort : viewModel != null ? viewModel.EjectionPort : null;
+            if (Definition.ShellCasingPrefab == null || ctx.Pools == null || port == null)
             {
                 return;
             }
 
-            Transform port = viewModel.EjectionPort;
             var shell = ctx.Pools.Spawn<ShellCasing>(Definition.ShellCasingPrefab, port.position, port.rotation);
             shell?.Eject(port.right, port.up);
         }
@@ -497,7 +528,7 @@ namespace Vent.Weapons.Runtime
                 return;
             }
 
-            Transform muzzle = viewModel != null ? viewModel.Muzzle : transform;
+            Transform muzzle = Muzzle;
             var tracer = ctx.Pools.Spawn<Tracer>(Definition.TracerPrefab, muzzle.position, Quaternion.identity);
             tracer?.Show(muzzle.position, endPoint);
         }

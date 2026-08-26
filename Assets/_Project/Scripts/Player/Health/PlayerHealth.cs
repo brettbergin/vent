@@ -34,6 +34,9 @@ namespace Vent.Player.Health
         /// <summary>When true damage is ignored (menus, the brief spawn grace window).</summary>
         public bool Invulnerable { get; set; }
 
+        /// <summary>Multiplier on incoming damage. A car body takes most of a zombie's swing: the driver sets this below one while seated.</summary>
+        public float DamageScale { get; set; } = 1f;
+
         /// <summary>True while either the manual flag or a timed grant (the Invulnerable perk) is in effect.</summary>
         public bool IsInvulnerable => Invulnerable || Time.time < invulnerableUntil;
 
@@ -79,7 +82,7 @@ namespace Vent.Player.Health
                 return DamageResult.None;
             }
 
-            float dealt = Mathf.Min(current, info.Amount);
+            float dealt = Mathf.Min(current, info.Amount * Mathf.Max(0f, DamageScale));
             current -= dealt;
             lastDamageTime = Time.time;
 

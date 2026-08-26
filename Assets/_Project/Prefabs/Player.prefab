@@ -47,6 +47,7 @@ GameObject:
   - component: {fileID: 8850930679270601935}
   - component: {fileID: 756459375995880555}
   - component: {fileID: 3829022172412690567}
+  - component: {fileID: 790891320893101827}
   m_Layer: 8
   m_Name: Player
   m_TagString: Player
@@ -195,12 +196,29 @@ MonoBehaviour:
   m_EditorClassIdentifier: Vent.Player::Vent.Player.PlayerCharacter
   input: {fileID: 11400000, guid: a13736f250905447ebd2a4137cfc9d9a, type: 2}
   viewCamera: {fileID: 5940930991302792815}
+  weaponCamera: {fileID: 3639797784620984908}
   inventory: {fileID: 756459375995880555}
   cameraMotion: {fileID: 5732477832192456839}
   aimPointHeight: 1.35
   levelChanged: {fileID: 11400000, guid: ddd74175f70a9412d9acbb5fdb68deaa, type: 2}
   healFractionOnLevelUp: 0.5
   perkCollected: {fileID: 11400000, guid: 9e59a3e879bc0435e89339f1b78d7b4d, type: 2}
+--- !u!114 &790891320893101827
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 844430578775481186}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b0de8a552b21e4a4083d5c472a1d6040, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Vent.Player::Vent.Player.Interaction.PlayerInteractor
+  input: {fileID: 11400000, guid: a13736f250905447ebd2a4137cfc9d9a, type: 2}
+  viewCamera: {fileID: 5940930991302792815}
+  prompt: {fileID: 11400000, guid: bd5d653ba6e4848ca82a5205713bb881, type: 2}
+  reach: 2.5
 --- !u!1 &1209904769889189285
 GameObject:
   m_ObjectHideFlags: 0
@@ -301,7 +319,7 @@ Camera:
     width: 1
     height: 1
   near clip plane: 0.05
-  far clip plane: 120
+  far clip plane: 500
   field of view: 75
   orthographic: 0
   orthographic size: 5

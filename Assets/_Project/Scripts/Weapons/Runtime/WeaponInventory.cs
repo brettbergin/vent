@@ -37,6 +37,8 @@ namespace Vent.Weapons.Runtime
         private WeaponContext context;
         private int currentIndex = -1;
         private bool initialized;
+        private bool slotLocked;
+        private int slotBeforeVehicle = -1;
 
         public Weapon Current => currentIndex >= 0 && currentIndex < weapons.Count ? weapons[currentIndex] : null;
         public IReadOnlyList<Weapon> Weapons => weapons;
@@ -145,7 +147,7 @@ namespace Vent.Weapons.Runtime
 
         public void SelectSlot(int index)
         {
-            if (index < 0 || index >= weapons.Count || index == currentIndex)
+            if (slotLocked || index < 0 || index >= weapons.Count || index == currentIndex)
             {
                 return;
             }
@@ -158,13 +160,51 @@ namespace Vent.Weapons.Runtime
         /// <summary>Move to the next/previous slot, wrapping.</summary>
         public void Cycle(int direction)
         {
-            if (weapons.Count == 0)
+            if (slotLocked || weapons.Count == 0)
             {
                 return;
             }
 
             int next = (currentIndex + (direction >= 0 ? 1 : -1) + weapons.Count) % weapons.Count;
             SelectSlot(next);
+        }
+
+        /// <summary>Freeze weapon switching (while seated in a car only the pistol is usable).</summary>
+        public void SetSlotLock(bool locked) => slotLocked = locked;
+
+        /// <summary>
+        /// Drive-by: draw the pistol, fire it from the car's window transforms instead of the hidden
+        /// view-model, and lock switching. The SMG stays where it is; ammo, reloads and kill credit
+        /// work as normal because the pistol is still logically drawn.
+        /// </summary>
+        public void EnterVehicleMode(Transform muzzle, Transform ejectionPort)
+        {
+            slotBeforeVehicle = currentIndex;
+            slotLocked = false;
+            for (int i = 0; i < weapons.Count; i++)
+            {
+                if (weapons[i].Definition.Slot == WeaponSlot.Secondary)
+                {
+                    SelectSlot(i);
+                    break;
+                }
+            }
+
+            Current?.SetRemoteMuzzle(muzzle, ejectionPort);
+            slotLocked = true;
+        }
+
+        /// <summary>Back on foot: the view-model returns and the previous weapon comes back out.</summary>
+        public void ExitVehicleMode()
+        {
+            Current?.SetRemoteMuzzle(null, null);
+            slotLocked = false;
+            if (slotBeforeVehicle >= 0)
+            {
+                SelectSlot(slotBeforeVehicle);
+            }
+
+            slotBeforeVehicle = -1;
         }
 
         /// <summary>Enable/disable firing on all weapons without holstering (menus, death).</summary>

@@ -105,5 +105,17 @@
         <Bindings><ui:DataBinding property="text" data-source-path="ToastText" binding-mode="ToTarget" /></Bindings>
       </ui:Label>
     </ui:VisualElement>
+
+    <ui:VisualElement name="prompt" class="prompt" picking-mode="Ignore">
+      <ui:Label name="prompt-text" text="" class="prompt__text">
+        <Bindings><ui:DataBinding property="text" data-source-path="PromptText" binding-mode="ToTarget" /></Bindings>
+      </ui:Label>
+    </ui:VisualElement>
+
+    <ui:VisualElement name="speedo" class="speedo" picking-mode="Ignore">
+      <ui:Label name="speedo-text" text="" class="speedo__text">
+        <Bindings><ui:DataBinding property="text" data-source-path="SpeedText" binding-mode="ToTarget" /></Bindings>
+      </ui:Label>
+    </ui:VisualElement>
   </ui:VisualElement>
 </ui:UXML>

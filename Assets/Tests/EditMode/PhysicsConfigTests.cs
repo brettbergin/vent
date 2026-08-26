@@ -36,6 +36,30 @@ namespace Vent.Tests.EditMode
         }
 
         [Test]
+        public void VehiclesIgnoreZombiesAndVentsButHitEverythingElse()
+        {
+            // A NavMeshAgent cannot be pushed, so a car would bounce off a zombie like a bollard;
+            // roadkill is an overlap query in code instead. Manhole covers are Vent-layer bullet targets.
+            Assert.IsTrue(Physics.GetIgnoreLayerCollision(Layers.VehicleIndex, Layers.ZombieIndex), "Vehicle-Zombie must be ignored (roadkill is applied in code).");
+            Assert.IsTrue(Physics.GetIgnoreLayerCollision(Layers.VehicleIndex, Layers.VentIndex), "Vehicle-Vent must be ignored (manhole covers are not bumps).");
+            Assert.IsFalse(Physics.GetIgnoreLayerCollision(Layers.VehicleIndex, Layers.EnvironmentIndex), "cars drive on the streets and hit walls");
+            Assert.IsFalse(Physics.GetIgnoreLayerCollision(Layers.VehicleIndex, Layers.PlayerIndex), "parked cars are solid to the player on foot");
+            Assert.IsFalse(Physics.GetIgnoreLayerCollision(Layers.VehicleIndex, Layers.VehicleIndex), "cars collide with each other");
+        }
+
+        [Test]
+        public void WorldBoundsCoverTheDistrict()
+        {
+            Object dynamics = UnityEditor.AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/DynamicsManager.asset")[0];
+            var so = new UnityEditor.SerializedObject(dynamics);
+            UnityEditor.SerializedProperty bounds = so.FindProperty("m_WorldBounds");
+            Assert.IsNotNull(bounds, "DynamicsManager exposes m_WorldBounds");
+            Vector3 extent = bounds.FindPropertyRelative("m_Extent").vector3Value;
+            Assert.GreaterOrEqual(extent.x, 380f, "the district reaches ±193 m; PhysX culls bodies outside the world bounds");
+            Assert.GreaterOrEqual(extent.z, 380f);
+        }
+
+        [Test]
         public void ZombiesStillCollideWithTheEnvironment()
         {
             // NavMesh geometry is baked from Environment colliders; the matrix should leave them intact.

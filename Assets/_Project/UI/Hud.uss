@@ -68,3 +68,13 @@
 .toast { position: absolute; top: 44%; left: 0; right: 0; align-items: center; opacity: 0; transition-property: opacity; transition-duration: 0.3s; }
 .toast__text { font-size: 22px; letter-spacing: 3px; color: var(--xp); -unity-font-style: bold; }
 .toast--visible { opacity: 1; }
+
+/* Interaction prompt: "[E]  OPEN DOOR" just under the crosshair while something usable is in reach. */
+.prompt { position: absolute; top: 58%; left: 0; right: 0; align-items: center; opacity: 0; transition-property: opacity; transition-duration: 0.15s; }
+.prompt__text { font-size: 18px; letter-spacing: 3px; color: var(--fg); background-color: rgba(0, 0, 0, 0.45); padding: 6px 14px; border-radius: 4px; }
+.prompt--visible { opacity: 1; }
+
+/* Speedometer, bottom centre, only while driving. */
+.speedo { position: absolute; bottom: 40px; left: 0; right: 0; align-items: center; opacity: 0; transition-property: opacity; transition-duration: 0.2s; }
+.speedo__text { font-size: 34px; -unity-font-style: bold; letter-spacing: 2px; color: var(--accent); }
+.speedo--visible { opacity: 1; }

@@ -1,0 +1,51 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8ddf1442c3ff740af8662d33617d404d, type: 3}
+  m_Name: Vehicle_Sedan
+  m_EditorClassIdentifier: Vent.Vehicles::Vent.Vehicles.Data.VehicleDefinition
+  displayName: Sedan
+  shape: 0
+  mass: 1350
+  centreOfMass: {x: 0, y: 0.35, z: 0}
+  motorTorque: 1800
+  reverseTorqueScale: 0.5
+  brakeTorque: 3500
+  handbrakeTorque: 6000
+  idleBrakeTorque: 250
+  topSpeed: 26
+  reverseTopSpeed: 8
+  downforcePerMps: 40
+  maxSteerDegrees: 32
+  highSpeedSteerScale: 0.35
+  steerSharpness: 8
+  wheelRadius: 0.34
+  suspensionDistance: 0.18
+  suspensionSpring: 38000
+  suspensionDamper: 4500
+  forwardStiffness: 1.6
+  sidewaysStiffness: 2
+  handbrakeSidewaysStiffness: 0.7
+  occupantDamageFactor: 0.35
+  roadkillMinSpeed: 4
+  roadkillLethalSpeed: 9
+  roadkillMinDamage: 20
+  roadkillMaxDamage: 80
+  roadkillLethalDamage: 10000
+  roadkillSpeedLoss: 0.07
+  rehitSeconds: 0.5
+  engineMinPitch: 0.7
+  engineMaxPitch: 2
+  engineMinVolume: 0.2
+  engineMaxVolume: 0.55
+  selfRightAfterSeconds: 2
+  settleSeconds: 1.5
+  killFloorY: -8

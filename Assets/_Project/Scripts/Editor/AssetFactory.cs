@@ -12,6 +12,7 @@ using Vent.Enemies.Data;
 using Vent.Enemies.Runtime;
 using Vent.Enemies.Spawning;
 using Vent.Player.Input;
+using Vent.Vehicles.Data;
 using Vent.Weapons.Data;
 
 namespace Vent.Editor
@@ -55,6 +56,9 @@ namespace Vent.Editor
             a.RestartRequested = Event<VoidEventChannel>("Evt_RestartRequested", "UI → GameManager: restart the run.");
             a.MenuRequested = Event<VoidEventChannel>("Evt_MenuRequested", "UI → GameManager: back to the main menu.");
             a.QuitRequested = Event<VoidEventChannel>("Evt_QuitRequested", "UI → GameManager: quit the application.");
+            a.Prompt = Event<StringEventChannel>("Evt_Prompt", "HUD interaction prompt (\"[E] OPEN DOOR\"); an empty string hides it. Raised by PlayerInteractor and the vehicle driver.");
+            a.Announcement = Event<StringEventChannel>("Evt_Announcement", "Centre-screen banner: \"TITLE\\nSUBTITLE\". Raised by world events such as the front door unlocking.");
+            a.VehicleSpeed = Event<FloatEventChannel>("Evt_VehicleSpeed", "Driven car speed in km/h while the player drives; -1 when they get out.");
 
             // ---- Runtime sets ----------------------------------------------------------
             a.Zombies = GetOrCreate<ZombieRuntimeSet>($"{Paths.Data}/Set_Zombies.asset");
@@ -65,6 +69,8 @@ namespace Vent.Editor
             a.Zombie = GetOrCreate<ZombieDefinition>($"{Paths.Data}/Zombie.asset");
             a.WeaponLevels = GetOrCreate<WeaponLevelCurve>($"{Paths.Data}/WeaponLevels_Standard.asset", c => c.ApplyDefaults(25));
             a.PerkDrops = GetOrCreate<PerkDropTable>($"{Paths.Data}/PerkDrops.asset", t => t.ApplyDefaults());
+            a.Sedan = GetOrCreate<VehicleDefinition>($"{Paths.Data}/Vehicle_Sedan.asset", v => v.ApplyDefaults(VehicleShape.Sedan));
+            a.Van = GetOrCreate<VehicleDefinition>($"{Paths.Data}/Vehicle_Van.asset", v => v.ApplyDefaults(VehicleShape.Van));
 
             a.Smg = GetOrCreate<WeaponDefinition>($"{Paths.Data}/Weapon_SMG.asset", w => w.Configure(
                 "SMG", WeaponSlot.Primary, FireMode.Automatic,
@@ -110,6 +116,16 @@ namespace Vent.Editor
             TextureFactory.TextureSet asphalt = TextureFactory.Asphalt();
             TextureFactory.TextureSet brushed = TextureFactory.BrushedMetal();
             TextureFactory.TextureSet fabric = TextureFactory.Fabric();
+            TextureFactory.TextureSet brick = TextureFactory.Brick();
+            TextureFactory.TextureSet stucco = TextureFactory.Stucco();
+            TextureFactory.TextureSet metalPanel = TextureFactory.MetalPanel();
+            TextureFactory.TextureSet pavers = TextureFactory.Pavers();
+            TextureFactory.TextureSet grass = TextureFactory.Grass();
+            TextureFactory.TextureSet dirt = TextureFactory.Dirt();
+            TextureFactory.TextureSet bark = TextureFactory.Bark();
+            TextureFactory.TextureSet birch = TextureFactory.Birch();
+            TextureFactory.TextureSet mulch = TextureFactory.Mulch();
+            FoliageTextureFactory.Result foliage = FoliageTextureFactory.Atlas();
 
             // ---- Materials -------------------------------------------------------------
             // Base colours tint the (near-white) albedo textures.
@@ -164,6 +180,53 @@ namespace Vent.Editor
             a.Skybox = Skybox("M_Skybox");
             // Tinted per perk at runtime through a MaterialPropertyBlock; the asset's white is a placeholder.
             a.PerkOrb = Lit("M_PerkOrb", Color.white, smoothness: 0.85f, metallic: 0.1f, emission: Color.white * 2.5f);
+            // The district: facades, ground and street furniture.
+            a.Brick = Lit("M_Brick", new Color(0.62f, 0.36f, 0.30f), smoothness: 0.15f, tex: brick);
+            a.Stucco = Lit("M_Stucco", new Color(0.72f, 0.68f, 0.60f), smoothness: 0.1f, tex: stucco);
+            a.MetalPanel = Lit("M_MetalPanel", new Color(0.55f, 0.57f, 0.60f), smoothness: 0.5f, metallic: 0.6f, tex: metalPanel);
+            a.Pavers = Lit("M_Pavers", new Color(0.58f, 0.58f, 0.57f), smoothness: 0.12f, tex: pavers);
+            a.Grass = Lit("M_Grass", new Color(0.30f, 0.42f, 0.20f), smoothness: 0.05f, tex: grass);
+            a.Dirt = Lit("M_Dirt", new Color(0.36f, 0.30f, 0.24f), smoothness: 0.05f, tex: dirt);
+            a.DarkGlass = Lit("M_DarkGlass", new Color(0.08f, 0.10f, 0.12f), smoothness: 0.92f, metallic: 0.3f);
+            a.LitWindow = Lit("M_LitWindow", new Color(0.9f, 0.8f, 0.6f), smoothness: 0.6f, emission: new Color(1f, 0.85f, 0.6f) * 1.6f);
+            a.NeonRed = Lit("M_NeonRed", new Color(0.9f, 0.15f, 0.1f), smoothness: 0.5f, emission: new Color(1f, 0.15f, 0.1f) * 3f);
+            a.NeonBlue = Lit("M_NeonBlue", new Color(0.2f, 0.5f, 1f), smoothness: 0.5f, emission: new Color(0.2f, 0.5f, 1f) * 3f);
+            a.NeonAmber = Lit("M_NeonAmber", new Color(1f, 0.7f, 0.2f), smoothness: 0.5f, emission: new Color(1f, 0.7f, 0.2f) * 3f);
+            a.PaintWhite = Lit("M_PaintWhite", new Color(0.9f, 0.9f, 0.85f), smoothness: 0.2f);
+            a.PaintYellow = Lit("M_PaintYellow", new Color(0.9f, 0.75f, 0.2f), smoothness: 0.2f);
+            a.Fence = LitTransparent("M_Fence", new Color(0.5f, 0.5f, 0.52f, 0.35f), smoothness: 0.3f);
+            a.LampHead = Lit("M_LampHead", new Color(0.9f, 0.85f, 0.7f), smoothness: 0.5f, emission: new Color(1f, 0.8f, 0.5f) * 3f);
+            a.Awning = Lit("M_Awning", new Color(0.6f, 0.15f, 0.12f), smoothness: 0.05f, tex: fabric);
+            // Cars: a handful of paints, glass, rubber, chrome, and the lamps.
+            a.CarPaints = new[]
+            {
+                Lit("M_CarPaint_Red", new Color(0.62f, 0.08f, 0.08f), smoothness: 0.7f, metallic: 0.55f),
+                Lit("M_CarPaint_Blue", new Color(0.10f, 0.18f, 0.45f), smoothness: 0.7f, metallic: 0.55f),
+                Lit("M_CarPaint_White", new Color(0.85f, 0.85f, 0.83f), smoothness: 0.7f, metallic: 0.55f),
+                Lit("M_CarPaint_Black", new Color(0.05f, 0.05f, 0.06f), smoothness: 0.75f, metallic: 0.6f),
+                Lit("M_CarPaint_Silver", new Color(0.55f, 0.57f, 0.6f), smoothness: 0.7f, metallic: 0.8f),
+                Lit("M_CarPaint_Green", new Color(0.12f, 0.32f, 0.18f), smoothness: 0.7f, metallic: 0.55f),
+            };
+            a.CarGlass = LitTransparent("M_CarGlass", new Color(0.15f, 0.2f, 0.25f, 0.55f), smoothness: 0.95f);
+            a.Tyre = Lit("M_Tyre", new Color(0.04f, 0.04f, 0.045f), smoothness: 0.3f);
+            a.Chrome = Lit("M_Chrome", new Color(0.8f, 0.8f, 0.82f), smoothness: 0.85f, metallic: 0.95f);
+            a.CarInterior = Lit("M_CarInterior", new Color(0.12f, 0.12f, 0.13f), smoothness: 0.2f);
+            a.Headlight = Lit("M_Headlight", new Color(0.9f, 0.9f, 0.85f), smoothness: 0.8f, metallic: 0.2f, emission: new Color(1f, 0.95f, 0.8f) * 2.5f);
+            a.Taillight = Lit("M_Taillight", new Color(0.6f, 0.05f, 0.05f), smoothness: 0.8f, metallic: 0.1f, emission: new Color(1f, 0.1f, 0.05f) * 2.5f);
+            a.Skin = Lit("M_Skin", new Color(0.8f, 0.62f, 0.5f), smoothness: 0.35f);
+            // Nature. One atlas, two winds: the street's, and the faint breath of the office air-conditioning.
+            // Crowns, shrubs and hedges are hundreds of overlapping cards, so an edge-on card can fade out
+            // without leaving a hole — and edge-on is exactly when a metre-wide card reads as a blade.
+            // Ground cover keeps every card: leaf litter lies flat, so a player looking along the pavement
+            // sees it near edge-on and a fade would erase it. Indoor plants are a few large single leaves.
+            a.Foliage = Foliage("M_Foliage", foliage, windLean: 0.22f, windSpeed: 1.1f, flutter: 0.035f, translucency: 0.5f, grazingFade: 0f);
+            a.FoliageCanopy = Foliage("M_FoliageCanopy", foliage, windLean: 0.22f, windSpeed: 1.1f, flutter: 0.035f, translucency: 0.5f, grazingFade: 0.6f);
+            a.FoliageIndoor = Foliage("M_FoliageIndoor", foliage, windLean: 0.015f, windSpeed: 0.7f, flutter: 0.006f, translucency: 0.35f, grazingFade: 0f);
+            a.Bark = Lit("M_Bark", new Color(0.55f, 0.48f, 0.40f), smoothness: 0.08f, tex: bark);
+            a.Birch = Lit("M_Birch", new Color(0.92f, 0.90f, 0.86f), smoothness: 0.15f, tex: birch);
+            a.Mulch = Lit("M_Mulch", new Color(0.50f, 0.44f, 0.36f), smoothness: 0.05f, tex: mulch);
+            a.Ceramic = Lit("M_Ceramic", new Color(0.86f, 0.84f, 0.78f), smoothness: 0.78f);
+            a.CeramicDark = Lit("M_CeramicDark", new Color(0.16f, 0.17f, 0.18f), smoothness: 0.72f);
             // Gunfire: additive sprites for the flash, the tracer core and sparks; alpha-blended smoke.
             Texture2D flashSprite = TextureFactory.MuzzleFlashSprite();
             Texture2D smokeSprite = TextureFactory.SmokeSprite();
@@ -264,6 +327,36 @@ namespace Vent.Editor
                 m.SetColor("_EmissionColor", Color.black);
             }
 
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
+        /// <summary>Vent/Foliage: cutout leaves from the atlas with wind, two-sided lighting and translucency (see the shader's header).</summary>
+        private static Material Foliage(string name, FoliageTextureFactory.Result atlas, float windLean, float windSpeed, float flutter, float translucency, float grazingFade)
+        {
+            Material m = GetOrCreateMaterial(name, "Vent/Foliage");
+            m.SetTexture("_BaseMap", atlas.Albedo);
+            m.SetTexture("_BumpMap", atlas.Normal);
+            m.SetColor("_BaseColor", Color.white);
+            m.SetColor("_VariationColor", new Color(0.88f, 0.94f, 0.72f, 0.55f));
+            m.SetFloat("_Cutoff", 0.45f);
+            m.SetFloat("_GrazingFade", grazingFade);
+            m.SetFloat("_Smoothness", 0.32f);
+            m.SetFloat("_BumpScale", 1.0f);
+            m.SetFloat("_OcclusionStrength", 1.0f);
+            m.SetVector("_WindDirection", new Vector4(1f, 0f, 0.35f, 0f));
+            m.SetFloat("_WindStrength", windLean);
+            m.SetFloat("_WindSpeed", windSpeed);
+            m.SetFloat("_WindGustScale", 0.12f);
+            m.SetFloat("_FlutterStrength", flutter);
+            m.SetFloat("_FlutterSpeed", 4.5f);
+            m.SetColor("_TranslucencyColor", new Color(1f, 0.95f, 0.6f));
+            m.SetFloat("_Translucency", translucency);
+            m.SetFloat("_TranslucencyPower", 3f);
+            m.SetFloat("_Wrap", 0.6f);
+            m.SetFloat("_SkyFill", 0.6f);
+            m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.AlphaTest;
+            m.SetOverrideTag("RenderType", "TransparentCutout");
             EditorUtility.SetDirty(m);
             return m;
         }

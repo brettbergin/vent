@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using Vent.Core.Settings;
 using Vent.Core.Utility;
@@ -43,6 +44,20 @@ namespace Vent.Player.Movement
         private Vector2 recoilCurrent;  // smoothed offset applied this frame
         private bool lookEnabled = true;
         private bool aiming;
+        private bool seated;
+
+        /// <summary>
+        /// While seated the look input is not applied here: it is handed to whoever drives the camera
+        /// (the chase rig), as degrees of yaw and pitch with the player's sensitivity and invert applied.
+        /// </summary>
+        public event Action<Vector2> SeatedLook;
+
+        /// <summary>Where recoil goes while seated (the chase rig); null discards it.</summary>
+        public IRecoilReceiver SeatedRecoil { get; set; }
+
+        public bool IsSeated => seated;
+
+        public void SetSeated(bool value) => seated = value;
 
         public float Sensitivity
         {
@@ -77,6 +92,12 @@ namespace Vent.Player.Movement
         /// <inheritdoc/>
         public void AddRecoil(Vector2 pitchYawDegrees)
         {
+            if (seated)
+            {
+                SeatedRecoil?.AddRecoil(pitchYawDegrees);
+                return;
+            }
+
             recoilTarget += pitchYawDegrees;
         }
 
@@ -122,9 +143,20 @@ namespace Vent.Player.Movement
                 Vector2 delta = mouse + stick;
                 input.ConsumeLookDelta();
 
+                if (seated)
+                {
+                    // Same sign convention as below: positive y looks down.
+                    SeatedLook?.Invoke(new Vector2(delta.x, invertY ? delta.y : -delta.y));
+                    return;
+                }
+
                 yaw += delta.x;
                 pitch += invertY ? delta.y : -delta.y;
                 pitch = Mathf.Clamp(pitch, -maxPitch, maxPitch);
+            }
+            else if (seated)
+            {
+                return;
             }
 
             // Recoil: kick blends toward the accumulated target, and the target itself decays.

@@ -12,7 +12,10 @@
     "Vent.UI",
     "Unity.RenderPipelines.Core.Runtime",
     "Unity.RenderPipelines.Universal.Runtime",
-    "Unity.RenderPipelines.GPUDriven.Runtime"
+    "Unity.RenderPipelines.GPUDriven.Runtime",
+    "Vent.Vehicles",
+    "Vent.Player",
+    "Unity.AI.Navigation"
   ],
   "includePlatforms": [
     "Editor"

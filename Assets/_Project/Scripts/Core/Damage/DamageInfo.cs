@@ -8,6 +8,8 @@ namespace Vent.Core.Damage
         Bullet,
         Melee,
         Environment,
+        /// <summary>Run over by a car. Zombies fling instead of toppling; kills count for the level but not for weapon XP.</summary>
+        Vehicle,
     }
 
     /// <summary>
@@ -36,8 +38,11 @@ namespace Vent.Core.Damage
         /// <summary>True if this hit struck a head hitbox.</summary>
         public readonly bool Headshot;
 
+        /// <summary>Speed of whatever hit the target, in m/s (vehicles). Zero when it does not apply; drives how far a body is flung.</summary>
+        public readonly float Impulse;
+
         public DamageInfo(float amount, DamageKind kind, Object source, Vector3 point, Vector3 normal,
-            Vector3 direction, bool headshot = false)
+            Vector3 direction, bool headshot = false, float impulse = 0f)
         {
             Amount = amount;
             Kind = kind;
@@ -46,12 +51,13 @@ namespace Vent.Core.Damage
             Normal = normal;
             Direction = direction;
             Headshot = headshot;
+            Impulse = impulse;
         }
 
         /// <summary>Copy with a different amount and headshot flag (used by hitboxes applying multipliers).</summary>
         public DamageInfo WithAmount(float amount, bool headshot)
         {
-            return new DamageInfo(amount, Kind, Source, Point, Normal, Direction, headshot);
+            return new DamageInfo(amount, Kind, Source, Point, Normal, Direction, headshot, Impulse);
         }
     }
 

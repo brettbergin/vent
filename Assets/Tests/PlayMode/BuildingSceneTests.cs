@@ -95,17 +95,21 @@ namespace Vent.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator PlayerCannotLeaveTheBuilding()
+        public IEnumerator PlayerStartsInASealedLobbyBehindTheFrontDoor()
         {
-            // From the player's eye, a ray in any horizontal direction must hit Environment (a wall) within the building's extents.
+            // From the player's eye, a ray in any horizontal direction must hit Environment (a wall, or
+            // the closed front door) within the building's extents: the run starts sealed in.
             Vector3 eye = player.AimPoint;
             int mask = LayerMask.GetMask(Layers.Environment);
+            bool sawDoor = false;
             for (int angle = 0; angle < 360; angle += 15)
             {
                 Vector3 dir = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
-                Assert.IsTrue(Physics.Raycast(eye, dir, 80f, mask), $"open horizon at {angle}°");
+                Assert.IsTrue(Physics.Raycast(eye, dir, out RaycastHit hit, 80f, mask, QueryTriggerInteraction.Ignore), $"open horizon at {angle}°");
+                sawDoor |= hit.collider.GetComponentInParent<Vent.Gameplay.World.FrontDoor>() != null;
             }
 
+            Assert.IsTrue(sawDoor, "the lobby's outer wall carries the closed front door");
             Assert.IsTrue(Physics.Raycast(eye, Vector3.up, 10f, mask), "no ceiling above the player");
             yield return null;
         }
@@ -329,7 +333,19 @@ namespace Vent.Tests.PlayMode
         {
             building.BeginRun();
             Object.FindFirstObjectByType<ZombieSpawner>().StopSpawning();
-            AirVent vent = Object.FindObjectsByType<AirVent>(FindObjectsSortMode.None)[0];
+            // The nearest vent: the bar only updates while it is within the camera's fade distance.
+            AirVent vent = null;
+            float best = float.MaxValue;
+            foreach (AirVent candidate in Object.FindObjectsByType<AirVent>(FindObjectsSortMode.None))
+            {
+                float d = Vector3.Distance(candidate.FloorPosition, player.Position);
+                if (d < best)
+                {
+                    best = d;
+                    vent = candidate;
+                }
+            }
+
             var zombieDef = Resources.FindObjectsOfTypeAll<ZombieDefinition>()[0];
             var zombie = GameServices.Get<PoolRegistry>().Spawn<Zombie>(zombieDef.Prefab, vent.GratePosition, Quaternion.identity);
             zombie.Spawn(new ZombieStats(100f, 5f, 3f, 25), vent);

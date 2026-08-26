@@ -1,0 +1,51 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8ddf1442c3ff740af8662d33617d404d, type: 3}
+  m_Name: Vehicle_Van
+  m_EditorClassIdentifier: Vent.Vehicles::Vent.Vehicles.Data.VehicleDefinition
+  displayName: Van
+  shape: 1
+  mass: 2100
+  centreOfMass: {x: 0, y: 0.45, z: 0}
+  motorTorque: 2600
+  reverseTorqueScale: 0.5
+  brakeTorque: 4500
+  handbrakeTorque: 7000
+  idleBrakeTorque: 300
+  topSpeed: 22
+  reverseTopSpeed: 7
+  downforcePerMps: 55
+  maxSteerDegrees: 28
+  highSpeedSteerScale: 0.35
+  steerSharpness: 7
+  wheelRadius: 0.38
+  suspensionDistance: 0.2
+  suspensionSpring: 52000
+  suspensionDamper: 6000
+  forwardStiffness: 1.6
+  sidewaysStiffness: 2
+  handbrakeSidewaysStiffness: 0.7
+  occupantDamageFactor: 0.3
+  roadkillMinSpeed: 4
+  roadkillLethalSpeed: 8
+  roadkillMinDamage: 20
+  roadkillMaxDamage: 80
+  roadkillLethalDamage: 10000
+  roadkillSpeedLoss: 0.05
+  rehitSeconds: 0.5
+  engineMinPitch: 0.6
+  engineMaxPitch: 1.7
+  engineMinVolume: 0.25
+  engineMaxVolume: 0.6
+  selfRightAfterSeconds: 2
+  settleSeconds: 1.5
+  killFloorY: -8

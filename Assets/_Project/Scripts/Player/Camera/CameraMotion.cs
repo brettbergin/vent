@@ -58,6 +58,9 @@ namespace Vent.Player.Camera
         /// <summary>Aiming down sights narrows the field of view a little; the weapon view-model moves in step.</summary>
         public void SetAiming(bool value) => aiming = value;
 
+        /// <summary>Extra field of view, in degrees, on top of the rest value: speed while driving. One writer for the FOV lives here.</summary>
+        public float FovBoost { get; set; }
+
         /// <summary>Kick off a shake (damage, nearby explosion). Amplitude in metres.</summary>
         public void Shake(float amplitude) => shakeAmplitude = Mathf.Max(shakeAmplitude, amplitude);
 
@@ -72,7 +75,7 @@ namespace Vent.Player.Camera
 
             if (cam != null)
             {
-                cam.fieldOfView = MathUtil.Damp(cam.fieldOfView, aiming ? restFov - aimZoomDegrees : restFov, aimZoomSharpness, dt);
+                cam.fieldOfView = MathUtil.Damp(cam.fieldOfView, (aiming ? restFov - aimZoomDegrees : restFov) + FovBoost, aimZoomSharpness, dt);
             }
             float speed01 = controller.Speed01;
             bool grounded = controller.IsGrounded;

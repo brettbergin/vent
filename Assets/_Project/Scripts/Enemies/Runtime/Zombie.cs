@@ -474,7 +474,15 @@ namespace Vent.Enemies.Runtime
         private void Die(in DamageInfo killingBlow)
         {
             EnterState(ZombieState.Dead);
-            animator?.PlayDeath(definition.CorpseSeconds, killingBlow.Direction);
+            if (killingBlow.Kind == DamageKind.Vehicle)
+            {
+                animator?.PlayRoadkill(definition.CorpseSeconds, killingBlow.Direction, killingBlow.Impulse);
+            }
+            else
+            {
+                animator?.PlayDeath(definition.CorpseSeconds, killingBlow.Direction);
+            }
+
             SfxPlayer.TryPlayAt(SoundId.ZombieDeath, transform.position, 0.9f);
             killChannel?.Raise(new KillInfo(transform.position + Vector3.up, killingBlow.Source, killingBlow.Headshot, stats.Experience));
         }

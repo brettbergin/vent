@@ -65,6 +65,11 @@ namespace Vent.Enemies.Runtime
         private float deathDuration = 2f;
         private float toppleSign = 1f;
         private float toppleYaw;
+        private bool roadkill;
+        private bool landed;
+        private Vector3 flingVelocity;
+        private Vector3 tumbleAxis;
+        private float tumbleRate;
         private float flash;
         private Vector3 flinchAxis = Vector3.right;
         private float flinch;
@@ -94,6 +99,8 @@ namespace Vent.Enemies.Runtime
             attackT = 1f;
             staggerT = 1f;
             deathT = 1f;
+            roadkill = false;
+            landed = false;
             flash = 0f;
             flinch = 0f;
             jawOpen = 0f;
@@ -135,6 +142,24 @@ namespace Vent.Enemies.Runtime
             // Shot from the front pushes the body backwards (falls onto its back); from behind, forwards.
             toppleSign = Vector3.Dot(hitDirection, transform.forward) >= 0f ? 1f : -1f;
             toppleYaw = Random.Range(-25f, 25f);
+        }
+
+        /// <summary>
+        /// Hit by a car: the rig is thrown along <paramref name="direction"/> in an arc, tumbling end
+        /// over end, lands flat and then sinks like any other corpse. The root stays where the car
+        /// struck (the agent is off), so this is all local motion of the rig.
+        /// </summary>
+        public void PlayRoadkill(float corpseSeconds, Vector3 direction, float speed)
+        {
+            deathDuration = Mathf.Max(0.1f, corpseSeconds);
+            deathT = 0f;
+            roadkill = true;
+            landed = false;
+            direction.y = 0f;
+            direction = direction.sqrMagnitude > 0.001f ? direction.normalized : transform.forward;
+            flingVelocity = direction * (speed * 0.7f) + Vector3.up * (2.5f + speed * 0.3f);
+            tumbleAxis = Vector3.Cross(Vector3.up, direction).normalized;
+            tumbleRate = Random.Range(360f, 720f);
         }
 
         public void Flinch(Vector3 hitDirection, float strength)
@@ -258,6 +283,12 @@ namespace Vent.Enemies.Runtime
         private void TickDeath(float dt)
         {
             deathT = Mathf.Min(1f, deathT + dt / deathDuration);
+            if (roadkill)
+            {
+                TickRoadkill(dt);
+                return;
+            }
+
             // Topple: accelerating fall about the feet to 88°, a small bounce, then sink through the floor.
             float fall = Mathf.SmoothStep(0f, 1f, Mathf.Min(1f, deathT * 2.4f));
             float bounce = Mathf.Sin(Mathf.Clamp01((deathT - 0.42f) / 0.25f) * Mathf.PI) * 4f;
@@ -271,6 +302,44 @@ namespace Vent.Enemies.Runtime
             if (rig.Head != null) rig.Head.localRotation = Quaternion.Euler(-hunchDegrees * 0.7f * (1f - slack) + 20f * slack, 0f, headTilt);
             Arm(rig.LeftShoulder, rig.LeftElbow, Mathf.Lerp(-reachDegrees, -10f, slack), 0f, 20f * slack, 0f);
             Arm(rig.RightShoulder, rig.RightElbow, Mathf.Lerp(-reachDegrees, -10f, slack), 0f, -20f * slack, 0f);
+            Leg(rig.LeftHip, rig.LeftKnee, 0f, 0f);
+            Leg(rig.RightHip, rig.RightKnee, 0f, 0f);
+            ApplyFlash(0f);
+        }
+
+        private void TickRoadkill(float dt)
+        {
+            Transform parent = transform.parent != null ? transform.parent : transform;
+            Vector3 axis = parent.InverseTransformDirection(tumbleAxis);
+            if (!landed)
+            {
+                flingVelocity += Vector3.down * (20f * dt);
+                Vector3 local = transform.localPosition + parent.InverseTransformDirection(flingVelocity) * dt;
+                transform.localRotation = Quaternion.AngleAxis(tumbleRate * dt, axis) * transform.localRotation;
+                if (local.y <= 0f && flingVelocity.y < 0f)
+                {
+                    local.y = 0f;
+                    landed = true;
+                }
+
+                transform.localPosition = local;
+            }
+            else
+            {
+                // Lie flat on the tumble axis, then sink through the road like any other corpse.
+                Quaternion flat = Quaternion.AngleAxis(88f, axis);
+                transform.localRotation = MathUtil.Damp(transform.localRotation, flat, 12f, dt);
+                float sink = Mathf.Max(0f, deathT - 0.55f) / 0.45f;
+                Vector3 local = transform.localPosition;
+                local.y = -1.4f * sink * sink;
+                transform.localPosition = local;
+            }
+
+            // Limbs fully slack from the moment of impact.
+            if (rig.Spine != null) rig.Spine.localRotation = Quaternion.identity;
+            if (rig.Head != null) rig.Head.localRotation = Quaternion.Euler(20f, 0f, headTilt);
+            Arm(rig.LeftShoulder, rig.LeftElbow, -10f, 0f, 20f, 0f);
+            Arm(rig.RightShoulder, rig.RightElbow, -10f, 0f, -20f, 0f);
             Leg(rig.LeftHip, rig.LeftKnee, 0f, 0f);
             Leg(rig.RightHip, rig.RightKnee, 0f, 0f);
             ApplyFlash(0f);

@@ -35,5 +35,13 @@ namespace Vent.Core.Audio
         PerkDrop,
         PerkPickup,
         PerkNuke,
+        DoorLocked,
+        DoorUnlock,
+        DoorOpen,
+        EngineLoop,
+        CarStart,
+        CarDoor,
+        CarImpact,
+        Roadkill,
     }
 }

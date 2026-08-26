@@ -17,7 +17,8 @@
         { "name": "Weapon2", "type": "Button", "id": "8c7c2d9e-1a33-4c4a-9b8a-0a1c2d3e4f0a", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
         { "name": "CycleWeapon", "type": "Value", "id": "8c7c2d9e-1a33-4c4a-9b8a-0a1c2d3e4f0b", "expectedControlType": "Axis", "processors": "", "interactions": "", "initialStateCheck": false },
         { "name": "SwapWeapon", "type": "Button", "id": "8c7c2d9e-1a33-4c4a-9b8a-0a1c2d3e4f0c", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
-        { "name": "Pause", "type": "Button", "id": "8c7c2d9e-1a33-4c4a-9b8a-0a1c2d3e4f0d", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false }
+        { "name": "Pause", "type": "Button", "id": "8c7c2d9e-1a33-4c4a-9b8a-0a1c2d3e4f0d", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "Interact", "type": "Button", "id": "8c7c2d9e-1a33-4c4a-9b8a-0a1c2d3e4f0e", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false }
       ],
       "bindings": [
         { "name": "WASD", "id": "b0000000-0000-4000-8000-000000000001", "path": "2DVector", "interactions": "", "processors": "", "groups": "", "action": "Move", "isComposite": true, "isPartOfComposite": false },
@@ -44,7 +45,9 @@
         { "name": "", "id": "b0000000-0000-4000-8000-000000000016", "path": "<Keyboard>/q", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "SwapWeapon", "isComposite": false, "isPartOfComposite": false },
         { "name": "", "id": "b0000000-0000-4000-8000-000000000017", "path": "<Gamepad>/buttonNorth", "interactions": "", "processors": "", "groups": "Gamepad", "action": "SwapWeapon", "isComposite": false, "isPartOfComposite": false },
         { "name": "", "id": "b0000000-0000-4000-8000-000000000018", "path": "<Keyboard>/escape", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Pause", "isComposite": false, "isPartOfComposite": false },
-        { "name": "", "id": "b0000000-0000-4000-8000-000000000019", "path": "<Gamepad>/start", "interactions": "", "processors": "", "groups": "Gamepad", "action": "Pause", "isComposite": false, "isPartOfComposite": false }
+        { "name": "", "id": "b0000000-0000-4000-8000-000000000019", "path": "<Gamepad>/start", "interactions": "", "processors": "", "groups": "Gamepad", "action": "Pause", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "b0000000-0000-4000-8000-00000000001a", "path": "<Keyboard>/e", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Interact", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "b0000000-0000-4000-8000-00000000001b", "path": "<Gamepad>/buttonEast", "interactions": "", "processors": "", "groups": "Gamepad", "action": "Interact", "isComposite": false, "isPartOfComposite": false }
       ]
     },
     {

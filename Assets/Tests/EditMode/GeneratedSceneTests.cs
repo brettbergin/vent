@@ -62,7 +62,8 @@ namespace Vent.Tests.EditMode
                 {
                     foreach (Volume v in root.GetComponentsInChildren<Volume>(includeInactive: true))
                     {
-                        if (v.isGlobal) global = v;
+                        // The base grade is the lowest-priority global volume; the outdoor overlay sits above it.
+                        if (v.isGlobal && (global == null || v.priority < global.priority)) global = v;
                     }
 
                     lights.AddRange(root.GetComponentsInChildren<Light>(includeInactive: true));
@@ -101,7 +102,7 @@ namespace Vent.Tests.EditMode
             Assert.AreEqual(ColorGradingMode.HighDynamicRange, asset.colorGradingMode);
             // Window lights must stay shadowed wherever the player stands: a light crossing the shadow
             // distance flips between shadowed and leaking through walls, which reads as blinking.
-            Assert.GreaterOrEqual(asset.shadowDistance, 55f, "shadow distance must cover the whole building");
+            Assert.GreaterOrEqual(asset.shadowDistance, 85f, "shadow distance must cover the whole building and reach across a city block");
         }
 
         [Test]
@@ -129,9 +130,14 @@ namespace Vent.Tests.EditMode
                 Assert.GreaterOrEqual(panes, 20, "every outer wall segment carries glazed, collidable windows");
                 Assert.AreEqual(panes, windowLights, "one spot light outside each window");
                 Assert.IsNotNull(sun, "an exterior sun drives the skybox");
-                Assert.AreEqual(LightShadows.None, sun.shadows, "the sun must not cast into the building; window lights do that");
+                // The sun casts real shadows (there is a street to stand in) but still lights only the
+                // exterior rendering layer; every layer casts, so the roof keeps sunlight out of the rooms.
+                Assert.AreEqual(LightShadows.Soft, sun.shadows, "the sun shadows the district; window lights do the interiors");
                 // URP reads rendering layers from the additional light data; Light.renderingLayerMask alone is ignored.
-                Assert.AreEqual(1u << 1, (uint)sun.GetUniversalAdditionalLightData().renderingLayers, "the sun lights the exterior rendering layer only");
+                UniversalAdditionalLightData sunData = sun.GetUniversalAdditionalLightData();
+                Assert.AreEqual(1u << 1, (uint)sunData.renderingLayers, "the sun lights the exterior rendering layer only");
+                Assert.IsTrue(sunData.customShadowLayers, "shadow layers are decoupled from light layers");
+                Assert.AreEqual(uint.MaxValue, (uint)sunData.shadowRenderingLayers, "everything casts the sun's shadow, or it leaks through ceilings onto sunlit objects");
                 Assert.IsNotNull(RenderSettings.skybox, "dusk skybox visible through the glass");
             }
             finally

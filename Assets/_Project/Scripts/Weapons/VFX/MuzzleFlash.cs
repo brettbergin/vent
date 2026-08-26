@@ -1,6 +1,7 @@
 using UnityEngine;
 using Vent.Core.Pooling;
 using Vent.Core.Services;
+using Vent.Core.Utility;
 
 namespace Vent.Weapons.VFX
 {
@@ -41,10 +42,24 @@ namespace Vent.Weapons.VFX
             block = new MaterialPropertyBlock();
         }
 
-        public void Play(Transform muzzle, float weaponScale = 1f)
+        /// <param name="firstPerson">
+        /// True for the view-model (the flash lives on the overlay camera's layer); false for a muzzle
+        /// out in the world, where the main camera must see it and the overlay camera cannot.
+        /// </param>
+        public void Play(Transform muzzle, float weaponScale = 1f, bool firstPerson = true)
         {
             spawnedAt = Time.time;
             transform.SetParent(muzzle, worldPositionStays: false);
+            int layer = firstPerson ? Layers.WeaponViewIndex : 0;
+            if (gameObject.layer != layer)
+            {
+                Layers.SetRecursively(gameObject, layer);
+                if (flashLight != null)
+                {
+                    flashLight.gameObject.layer = Layers.PlayerIndex; // lights live where both cameras look
+                }
+            }
+
             transform.localPosition = Vector3.zero;
             transform.localRotation = Quaternion.Euler(0f, 0f, Random.Range(0f, 360f));
             scale = weaponScale * Random.Range(0.75f, 1.25f);

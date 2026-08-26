@@ -26,6 +26,12 @@ namespace Vent.UI.Screens
         [SerializeField] private LevelEventChannel levelChanged;
         [SerializeField] private IntEventChannel killsThisLevelChanged;
         [SerializeField] private PerkEventChannel perkCollected;
+        [SerializeField, Tooltip("Interaction prompt text; empty hides it.")]
+        private StringEventChannel prompt;
+        [SerializeField, Tooltip("Banner text: \"TITLE\\nSUBTITLE\".")]
+        private StringEventChannel announcement;
+        [SerializeField, Tooltip("km/h while driving; negative hides the speedometer.")]
+        private FloatEventChannel vehicleSpeed;
 
         [Header("Tuning")]
         [SerializeField, Min(0f)] private float crosshairPixelsPerDegree = 22f;
@@ -33,7 +39,7 @@ namespace Vent.UI.Screens
 
         private readonly HudViewModel model = new();
 
-        private VisualElement ammo, hitmarker, banner, toast;
+        private VisualElement ammo, hitmarker, banner, toast, promptElement, speedo;
         private VisualElement[] slots;
 
         private float vignetteFlash;
@@ -52,8 +58,12 @@ namespace Vent.UI.Screens
         public HudViewModel Model => model;
 
         public void Configure(HealthEventChannel health, WeaponHudEventChannel weapon, WeaponLevelUpEventChannel weaponLevel,
-            BoolEventChannel hit, LevelEventChannel level, IntEventChannel kills, PerkEventChannel perks)
+            BoolEventChannel hit, LevelEventChannel level, IntEventChannel kills, PerkEventChannel perks,
+            StringEventChannel promptChannel = null, StringEventChannel announcementChannel = null, FloatEventChannel speedChannel = null)
         {
+            prompt = promptChannel;
+            announcement = announcementChannel;
+            vehicleSpeed = speedChannel;
             perkCollected = perks;
             healthChanged = health;
             weaponChanged = weapon;
@@ -73,6 +83,9 @@ namespace Vent.UI.Screens
             levelChanged?.Subscribe(OnLevel);
             killsThisLevelChanged?.Subscribe(OnKills);
             perkCollected?.Subscribe(OnPerk);
+            prompt?.Subscribe(OnPrompt);
+            announcement?.Subscribe(OnAnnouncement);
+            vehicleSpeed?.Subscribe(OnVehicleSpeed);
         }
 
         protected override void OnDisable()
@@ -84,6 +97,9 @@ namespace Vent.UI.Screens
             levelChanged?.Unsubscribe(OnLevel);
             perkCollected?.Unsubscribe(OnPerk);
             killsThisLevelChanged?.Unsubscribe(OnKills);
+            prompt?.Unsubscribe(OnPrompt);
+            announcement?.Unsubscribe(OnAnnouncement);
+            vehicleSpeed?.Unsubscribe(OnVehicleSpeed);
             base.OnDisable();
         }
 
@@ -95,6 +111,8 @@ namespace Vent.UI.Screens
             hitmarker = r.Q<VisualElement>("hitmarker");
             banner = r.Q<VisualElement>("banner");
             toast = r.Q<VisualElement>("toast");
+            promptElement = r.Q<VisualElement>("prompt");
+            speedo = r.Q<VisualElement>("speedo");
             slots = new[] { r.Q<VisualElement>("slot-0"), r.Q<VisualElement>("slot-1") };
         }
 
@@ -209,14 +227,54 @@ namespace Vent.UI.Screens
             model.LevelText = $"LEVEL {info.Level}";
             model.KillsText = $"0 / {killsRequired}";
 
-            if (info.Level > 1 && banner != null)
+            if (info.Level > 1)
             {
-                model.BannerTitle = $"LEVEL {info.Level}";
-                model.BannerSub = "AMMO RESTOCKED";
-                banner.AddToClassList("banner--visible");
-                bannerHide?.Pause();
-                bannerHide = banner.schedule.Execute(() => banner.RemoveFromClassList("banner--visible")).StartingIn(2200);
+                ShowBanner($"LEVEL {info.Level}", "AMMO RESTOCKED");
             }
+        }
+
+        private void OnPrompt(string text)
+        {
+            EnsureBound();
+            model.PromptText = text ?? string.Empty;
+            promptElement?.EnableInClassList("prompt--visible", !string.IsNullOrEmpty(text));
+        }
+
+        /// <summary>"TITLE\nSUBTITLE" from anywhere in the world (the front door unlocking).</summary>
+        private void OnAnnouncement(string text)
+        {
+            EnsureBound();
+            if (string.IsNullOrEmpty(text))
+            {
+                return;
+            }
+
+            int split = text.IndexOf('\n');
+            string title = split < 0 ? text : text.Substring(0, split);
+            string sub = split < 0 ? string.Empty : text.Substring(split + 1);
+            ShowBanner(title, sub);
+        }
+
+        private void OnVehicleSpeed(float kmh)
+        {
+            EnsureBound();
+            bool driving = kmh >= 0f;
+            model.SpeedText = driving ? $"{Mathf.RoundToInt(kmh)} km/h" : string.Empty;
+            speedo?.EnableInClassList("speedo--visible", driving);
+        }
+
+        private void ShowBanner(string title, string sub)
+        {
+            model.BannerTitle = title;
+            model.BannerSub = sub;
+            if (banner == null)
+            {
+                return;
+            }
+
+            banner.AddToClassList("banner--visible");
+            bannerHide?.Pause();
+            bannerHide = banner.schedule.Execute(() => banner.RemoveFromClassList("banner--visible")).StartingIn(2200);
         }
 
         private void OnKills(int kills)

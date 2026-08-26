@@ -5,8 +5,10 @@ using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
+using Vent.Core.Events;
 using Vent.Core.Utility;
 using Vent.Enemies.Spawning;
+using Vent.Gameplay.World;
 
 namespace Vent.Editor
 {
@@ -27,6 +29,13 @@ namespace Vent.Editor
         /// <summary>Windows per outer wall segment.</summary>
         public int WindowsPerWall = 2;
         public bool Exterior = true;
+        /// <summary>Cut a front door into the lobby's outer wall. Off for the menu backdrop.</summary>
+        public bool FrontDoor = true;
+        public float FrontDoorWidth = 2.2f;
+        /// <summary>A pavement apron around the building. Off when a district lays its own streets.</summary>
+        public bool Apron = true;
+        /// <summary>Half extents (XZ) the skyline must stay clear of; zero means "the building plus a margin".</summary>
+        public Vector2 ExteriorClearHalfExtents = Vector2.zero;
         public int Seed = 1337;
         /// <summary>Fraction of non-tree adjacencies that also get a door (adds loops).</summary>
         public float ExtraDoorChance = 0.35f;
@@ -38,7 +47,9 @@ namespace Vent.Editor
     /// joined by doorways (a random spanning tree plus a few extra doors so there are loops),
     /// ceiling lights, cover props, and AC vents high on the walls. Deterministic for a seed.
     ///
-    /// The player can never leave: every outer wall is solid and every room has a ceiling.
+    /// The player starts sealed in: every outer wall is glazed and solid, every room has a ceiling,
+    /// and the only way out is the lobby's front door, which stays locked until level 4
+    /// (<see cref="FrontDoor"/>).
     /// </summary>
     public static class BuildingGenerator
     {
@@ -47,6 +58,14 @@ namespace Vent.Editor
             public GameObject Root;
             public Vector3 PlayerSpawn;
             public float PlayerYaw;
+            /// <summary>Centre of the front door opening at floor level, and the direction out of the building.</summary>
+            public Vector3 FrontDoorPosition;
+            public Vector3 FrontDoorOutward = Vector3.right;
+            /// <summary>The walls-and-roof volume, slightly padded: "inside the building" for the atmosphere blend.</summary>
+            public Bounds Footprint;
+            public (int c, int r) LobbyCell;
+            public Transform LightsRoot;
+            public Transform VentsRoot;
             public readonly List<AirVent> Vents = new();
             public readonly List<Vector3> RoomCenters = new();
             public readonly List<Vector3> WindowCenters = new();
@@ -71,9 +90,17 @@ namespace Vent.Editor
             Transform vents = Child(result.Root.transform, "Vents");
             Transform props = Child(result.Root.transform, "Props");
             Transform decals = Child(result.Root.transform, "Decals");
+            Transform foliage = Child(result.Root.transform, "Foliage");
+            result.LightsRoot = lights;
+            result.VentsRoot = vents;
 
             int cols = layout.Columns, rows = layout.Rows;
             float cell = layout.CellSize, t = layout.WallThickness, h = layout.Height;
+            // The lobby is the room with the front door: on the +X edge, middle row, so the street
+            // is a straight walk from the spawn. Without a front door it stays in the middle.
+            int lobbyC = layout.FrontDoor ? cols - 1 : cols / 2, lobbyR = rows / 2;
+            result.LobbyCell = (lobbyC, lobbyR);
+            result.Footprint = new Bounds(new Vector3(0f, h / 2f, 0f), new Vector3(cols * cell + 2f, h + 3f, rows * cell + 2f));
 
             HashSet<(int, int)> doors = PlanDoors(cols, rows, rng, layout.ExtraDoorChance);
             var ventFloorPoints = new List<Vector3>();
@@ -132,14 +159,24 @@ namespace Vent.Editor
                 {
                     bool outer = c < 0 || c == cols - 1;
                     bool hasDoor = !outer && doors.Contains(Key(Index(c, r, cols), Index(c + 1, r, cols)));
+                    bool entrance = outer && layout.FrontDoor && c == cols - 1 && r == lobbyR;
                     Vector3 left = CellCenter(Mathf.Max(c, 0), r, cols, rows, cell);
                     float x = c < 0 ? left.x - cell / 2f : left.x + cell / 2f;
                     var wallCenter = new Vector3(x, 0f, left.z);
                     if (outer)
                     {
                         // Outer walls get windows; the light outside them is what brightens the rooms.
+                        // The lobby's outer wall also carries the front door opening (the door itself is
+                        // added by BuildFrontDoor after the NavMesh bake, so the doorway is walkable).
                         Vector3 inward = c < 0 ? Vector3.right : Vector3.left;
-                        BuildWindowWall(geometry, lights, a, layout, wallCenter, alongZ: true, cell, t, h, inward, $"WallX_{c}_{r}", result.WindowCenters);
+                        BuildWindowWall(geometry, lights, a, layout, wallCenter, alongZ: true, cell, t, h, inward, $"WallX_{c}_{r}", result.WindowCenters,
+                            doorWidth: entrance ? layout.FrontDoorWidth : 0f, doorHeight: layout.DoorHeight, rng: rng, foliage: foliage);
+                        if (entrance)
+                        {
+                            result.FrontDoorPosition = wallCenter;
+                            result.FrontDoorOutward = Vector3.right;
+                            doorCenters.Add(wallCenter); // keeps furniture and vents clear of the entrance
+                        }
                     }
                     else
                     {
@@ -166,7 +203,7 @@ namespace Vent.Editor
                     if (outer)
                     {
                         Vector3 inward = r < 0 ? Vector3.forward : Vector3.back;
-                        BuildWindowWall(geometry, lights, a, layout, wallCenter, alongZ: false, cell, t, h, inward, $"WallZ_{c}_{r}", result.WindowCenters);
+                        BuildWindowWall(geometry, lights, a, layout, wallCenter, alongZ: false, cell, t, h, inward, $"WallZ_{c}_{r}", result.WindowCenters, rng: rng, foliage: foliage);
                     }
                     else
                     {
@@ -180,10 +217,10 @@ namespace Vent.Editor
                 }
             }
 
-            // ---- Player spawn: the most central room, facing +Z ------------------------------
-            Vector3 spawnCenter = CellCenter(cols / 2, rows / 2, cols, rows, cell);
+            // ---- Player spawn: the lobby, facing the front door (or +Z when there is none) -------
+            Vector3 spawnCenter = CellCenter(lobbyC, lobbyR, cols, rows, cell);
             result.PlayerSpawn = spawnCenter;
-            result.PlayerYaw = 0f;
+            result.PlayerYaw = layout.FrontDoor ? 90f : 0f;
 
             // ---- Vents: 1-2 per room, on walls, clear of doorways ------------------------------
             for (int r = 0; r < rows; r++)
@@ -207,7 +244,9 @@ namespace Vent.Editor
                             float offset = (float)(rng.NextDouble() * (cell / 2f - 2.6f) + 1.6f) * (rng.NextDouble() < 0.5 ? -1f : 1f);
                             Vector3 wallInner = center - normal * (cell / 2f - t / 2f) + along * offset;
                             pos = new Vector3(wallInner.x, layout.VentHeight, wallInner.z);
-                            ventPlaced = Clear(new Vector3(pos.x, 0f, pos.z), result.WindowCenters, layout.WindowWidth / 2f + 0.7f);
+                            Vector3 footprint = new Vector3(pos.x, 0f, pos.z);
+                            ventPlaced = Clear(footprint, result.WindowCenters, layout.WindowWidth / 2f + 0.7f)
+                                         && Clear(footprint, doorCenters, layout.FrontDoorWidth / 2f + 0.9f);
                         }
 
                         if (!ventPlaced)
@@ -236,7 +275,7 @@ namespace Vent.Editor
                 for (int c = 0; c < cols; c++)
                 {
                     Vector3 center = CellCenter(c, r, cols, rows, cell);
-                    bool isSpawnRoom = c == cols / 2 && r == rows / 2;
+                    bool isSpawnRoom = c == lobbyC && r == lobbyR;
                     RoomType type = isSpawnRoom ? RoomType.Lobby : PickRoomType(rng);
                     Transform room = Child(props, $"Room_{c}_{r}_{type}");
                     var placer = new RoomDresser(a, rng, room, center, cell, t, doorCenters, ventFloorPoints, spawnCenter);
@@ -247,7 +286,7 @@ namespace Vent.Editor
             // ---- Exterior: what you see through the windows -------------------------------------
             if (layout.Exterior)
             {
-                BuildExterior(result.Root.transform, a, rng, cols * cell, rows * cell, h);
+                BuildExterior(result.Root.transform, a, rng, cols * cell, rows * cell, h, layout.ExteriorClearHalfExtents, layout.Apron);
             }
 
             // ---- Probes: baked bounce light for movers, and per-room reflections -------------------
@@ -259,9 +298,17 @@ namespace Vent.Editor
                 GameObjectUtility.SetStaticEditorFlags(child.gameObject, StaticFlags);
             }
 
+            // Leaves are probe-lit, never lightmapped: a cutout card in a lightmap is wasted texels and
+            // a bleed of black around every leaf. They still batch, occlude and cast.
             foreach (Transform child in props.GetComponentsInChildren<Transform>())
             {
-                GameObjectUtility.SetStaticEditorFlags(child.gameObject, StaticFlags);
+                bool leaves = child.name == FoliageLibrary.RendererName;
+                GameObjectUtility.SetStaticEditorFlags(child.gameObject, leaves ? StaticFlags & ~StaticEditorFlags.ContributeGI : StaticFlags);
+            }
+
+            foreach (Transform child in foliage.GetComponentsInChildren<Transform>())
+            {
+                GameObjectUtility.SetStaticEditorFlags(child.gameObject, StaticFlags & ~StaticEditorFlags.ContributeGI);
             }
 
             foreach (Transform child in decals.GetComponentsInChildren<Transform>())
@@ -271,19 +318,115 @@ namespace Vent.Editor
 
             if (layout.BakeNavMesh)
             {
-                var surface = result.Root.AddComponent<NavMeshSurface>();
-                surface.collectObjects = CollectObjects.All;
-                surface.useGeometry = NavMeshCollectGeometry.PhysicsColliders;
-                surface.layerMask = LayerMask.GetMask(Layers.Environment);
-                surface.BuildNavMesh();
-                if (surface.navMeshData != null)
-                {
-                    AssetDatabase.DeleteAsset(Paths.BuildingNavMesh);
-                    AssetDatabase.CreateAsset(surface.navMeshData, Paths.BuildingNavMesh);
-                }
+                BakeNavMesh(result.Root);
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Bake the walkable surface from every Environment collider in the scene (the building and,
+        /// when present, the district's streets) and save it next to the scene. Called separately from
+        /// <see cref="Generate"/> when other generators add walkable ground first; the door leaves are
+        /// added afterwards so the doorway itself is walkable and carved only while shut.
+        /// </summary>
+        public static void BakeNavMesh(GameObject root)
+        {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var surface = root.GetComponent<NavMeshSurface>();
+            if (surface == null)
+            {
+                surface = root.AddComponent<NavMeshSurface>();
+            }
+
+            surface.collectObjects = CollectObjects.All;
+            surface.useGeometry = NavMeshCollectGeometry.PhysicsColliders;
+            surface.layerMask = LayerMask.GetMask(Layers.Environment);
+            // 0.2 m voxels: a 1 m gap between desks is still five voxels wide, and a city block of
+            // streets bakes in well under a minute. Larger tiles keep the tile count sane outdoors.
+            surface.overrideVoxelSize = true;
+            surface.voxelSize = 0.2f;
+            surface.overrideTileSize = true;
+            surface.tileSize = 256;
+            surface.minRegionArea = 4f;
+            surface.BuildNavMesh();
+            if (surface.navMeshData != null)
+            {
+                AssetDatabase.DeleteAsset(Paths.BuildingNavMesh);
+                AssetDatabase.CreateAsset(surface.navMeshData, Paths.BuildingNavMesh);
+            }
+
+            Debug.Log($"[Vent] NavMesh baked in {clock.Elapsed.TotalSeconds:0}s");
+        }
+
+        // ------------------------------------------------------------------ front door
+
+        /// <summary>
+        /// Commercial double glass doors in the lobby's entrance opening: two hinged leaves that swing
+        /// outward, a threshold, an exit sign and the card-reader lamp that goes green at level 4.
+        /// Built after the NavMesh bake and left non-static: the leaves move, and their colliders
+        /// must not be baked into the walkable surface. Layer Environment so bullets and the sealed-
+        /// lobby test still hit a closed door.
+        /// </summary>
+        public static FrontDoor BuildFrontDoor(GameAssets a, Result building, LevelEventChannel level, StringEventChannel announcement, GameObject exteriorVents)
+        {
+            float width = 2.2f, height = 2.4f, depth = 0.05f;
+            float leaf = width / 2f - 0.01f; // hinge-to-meeting-stile; the two meeting stiles all but touch
+
+            var rootGo = new GameObject("FrontDoor");
+            Transform root = rootGo.transform;
+            root.SetParent(building.Root.transform, false);
+
+            Transform hingeL = Child(root, "HingeL");
+            hingeL.localPosition = new Vector3(-width / 2f, 0f, 0f);
+            Transform hingeR = Child(root, "HingeR");
+            hingeR.localPosition = new Vector3(width / 2f, 0f, 0f);
+            BuildLeaf(a, hingeL, +1f, leaf, height, depth);
+            BuildLeaf(a, hingeR, -1f, leaf, height, depth);
+
+            // Threshold plate across the opening, exit sign above it on the inside, lamp + card reader on the right jamb.
+            Block(root, "Threshold", new Vector3(0f, 0.01f, 0f), new Vector3(width, 0.02f, 0.35f), a.MetalDark, collider: false);
+            Block(root, "ExitSign", new Vector3(0f, height + 0.35f, -0.18f), new Vector3(0.5f, 0.18f, 0.04f), a.LedGreen, collider: false);
+            Block(root, "CardReader", new Vector3(width / 2f + 0.05f, 1.05f, -0.185f), new Vector3(0.09f, 0.14f, 0.02f), a.MetalDark, collider: false);
+            GameObject lamp = Block(root, "LockLamp", new Vector3(width / 2f + 0.05f, 1.2f, -0.19f), new Vector3(0.08f, 0.08f, 0.03f), a.LedAmber, collider: false);
+
+            // Shut doors carve the doorway out of the NavMesh so nothing paths through glass.
+            var obstacle = rootGo.AddComponent<NavMeshObstacle>();
+            obstacle.shape = NavMeshObstacleShape.Box;
+            obstacle.center = new Vector3(0f, height / 2f, 0f);
+            obstacle.size = new Vector3(width, height, 0.6f);
+            obstacle.carving = true;
+            obstacle.carveOnlyStationary = false;
+
+            var door = rootGo.AddComponent<FrontDoor>();
+            door.Configure(level, announcement, hingeL, hingeR, obstacle, lamp.GetComponent<Renderer>(), exteriorVents);
+
+            Layers.SetRecursively(rootGo, Layers.EnvironmentIndex);
+            root.SetPositionAndRotation(building.FrontDoorPosition, Quaternion.LookRotation(building.FrontDoorOutward));
+            return door;
+        }
+
+        /// <summary>One leaf hanging off a hinge: stiles, rails, a glass pane, a push bar, and a single collider for the lot.</summary>
+        private static void BuildLeaf(GameAssets a, Transform hinge, float sign, float leaf, float height, float depth)
+        {
+            float mid = sign * leaf / 2f;
+            // Block() positions in world space and the door root is still at the origin with identity
+            // rotation here, so hinge-local coordinates only need the hinge's own offset added.
+            Vector3 o = hinge.position;
+            Block(hinge, "StileHinge", o + new Vector3(sign * 0.03f, height / 2f, 0f), new Vector3(0.06f, height - 0.02f, depth), a.MetalDark, collider: false);
+            Block(hinge, "StileMeet", o + new Vector3(sign * (leaf - 0.03f), height / 2f, 0f), new Vector3(0.06f, height - 0.02f, depth), a.MetalDark, collider: false);
+            Block(hinge, "RailTop", o + new Vector3(mid, height - 0.04f, 0f), new Vector3(leaf, 0.06f, depth), a.MetalDark, collider: false);
+            Block(hinge, "RailBottom", o + new Vector3(mid, 0.16f, 0f), new Vector3(leaf, 0.3f, depth), a.MetalDark, collider: false);
+            GameObject pane = Block(hinge, "LeafPane", o + new Vector3(mid, (height + 0.31f) / 2f, 0f), new Vector3(leaf - 0.1f, height - 0.31f - 0.07f, 0.012f), a.WindowGlass, collider: false);
+            pane.GetComponent<Renderer>().shadowCastingMode = ShadowCastingMode.Off;
+            Block(hinge, "PushBar", o + new Vector3(mid, 1.0f, -0.07f), new Vector3(leaf - 0.2f, 0.04f, 0.05f), a.MetalGrey, collider: false);
+
+            // One collider for the whole leaf, in hinge space so it swings with it. A touch wider
+            // than the leaf so the two overlap at the meeting stiles: a shut door has no crack for
+            // a bullet (or the sealed-lobby test's ray) to slip through.
+            var box = hinge.gameObject.AddComponent<BoxCollider>();
+            box.center = new Vector3(mid, height / 2f, 0f);
+            box.size = new Vector3(leaf + 0.06f, height, 0.06f);
         }
 
         // ------------------------------------------------------------------ windows & exterior
@@ -295,7 +438,8 @@ namespace Vent.Editor
         /// only light that comes "through" the windows, which is why it never leaks through walls.
         /// </summary>
         private static void BuildWindowWall(Transform parent, Transform lights, GameAssets a, BuildingLayout layout, Vector3 center, bool alongZ,
-            float length, float thickness, float height, Vector3 inward, string name, List<Vector3> windowCenters)
+            float length, float thickness, float height, Vector3 inward, string name, List<Vector3> windowCenters, float doorWidth = 0f, float doorHeight = 0f,
+            System.Random rng = null, Transform foliage = null)
         {
             Vector3 along = alongZ ? Vector3.forward : Vector3.right;
             Vector3 Size(float len, float hgt) => alongZ ? new Vector3(thickness, hgt, len) : new Vector3(len, hgt, thickness);
@@ -304,13 +448,40 @@ namespace Vent.Editor
             float sill = layout.WindowSill, top = Mathf.Min(layout.WindowTop, height - 0.2f), w = layout.WindowWidth;
             int n = Mathf.Max(1, layout.WindowsPerWall);
             float full = length + thickness;
+            bool door = doorWidth > 0f;
+            doorHeight = Mathf.Min(doorHeight, top); // the "Above" band is the lintel
 
-            Block(wall, "Below", center + Vector3.up * (sill / 2f), Size(full, sill), a.Wall);
-            WallTrim(wall, a, center, alongZ, full, thickness, height, inward);
+            if (door)
+            {
+                // The entrance: the wall below the sill is split around the opening, and static jambs
+                // and a header frame it. The leaves themselves come later (BuildFrontDoor).
+                float side = full / 2f - doorWidth / 2f;
+                Block(wall, "BelowL", center - along * (doorWidth / 2f + side / 2f) + Vector3.up * (sill / 2f), Size(side, sill), a.Wall);
+                Block(wall, "BelowR", center + along * (doorWidth / 2f + side / 2f) + Vector3.up * (sill / 2f), Size(side, sill), a.Wall);
+                WallTrim(wall, a, center - along * (doorWidth / 2f + side / 2f), alongZ, side, thickness, height, inward);
+                WallTrim(wall, a, center + along * (doorWidth / 2f + side / 2f), alongZ, side, thickness, height, inward);
+                Vector3 jambSize = Size(0.1f, doorHeight) + (alongZ ? new Vector3(0.04f, 0f, 0f) : new Vector3(0f, 0f, 0.04f));
+                Block(wall, "DoorJambL", center - along * (doorWidth / 2f + 0.05f) + Vector3.up * (doorHeight / 2f), jambSize, a.MetalDark);
+                Block(wall, "DoorJambR", center + along * (doorWidth / 2f + 0.05f) + Vector3.up * (doorHeight / 2f), jambSize, a.MetalDark);
+                Block(wall, "DoorHeader", center + Vector3.up * (doorHeight + 0.04f), Size(doorWidth + 0.2f, 0.08f) + (alongZ ? new Vector3(0.04f, 0f, 0f) : new Vector3(0f, 0f, 0.04f)), a.MetalDark, collider: false);
+            }
+            else
+            {
+                Block(wall, "Below", center + Vector3.up * (sill / 2f), Size(full, sill), a.Wall);
+                WallTrim(wall, a, center, alongZ, full, thickness, height, inward);
+            }
+
             Block(wall, "Above", center + Vector3.up * (top + (height - top) / 2f), Size(full, height - top), a.Wall);
 
-            // Windows evenly spaced; piers fill the gaps (including the corner overlap at both ends).
+            // Windows evenly spaced; piers fill the gaps (including the corner overlap at both ends
+            // and, on the entrance wall, either side of the door opening).
             var edges = new List<float> { -full / 2f };
+            if (door)
+            {
+                edges.Add(-doorWidth / 2f);
+                edges.Add(doorWidth / 2f);
+            }
+
             for (int i = 0; i < n; i++)
             {
                 float wc = (i - (n - 1) / 2f) * (length / n);
@@ -357,6 +528,7 @@ namespace Vent.Editor
             }
 
             edges.Add(full / 2f);
+            edges.Sort();
             for (int i = 0; i < edges.Count; i += 2)
             {
                 float a0 = edges[i], a1 = edges[i + 1];
@@ -366,6 +538,45 @@ namespace Vent.Editor
                 }
 
                 Block(wall, $"Pier{i / 2}", center + along * ((a0 + a1) / 2f) + Vector3.up * ((sill + top) / 2f), Size(a1 - a0, top - sill), a.Wall);
+            }
+
+            // The outer face is outdoors: let the sun light it (its shadow map keeps the inner face dark).
+            foreach (Renderer r in wall.GetComponentsInChildren<Renderer>())
+            {
+                r.renderingLayerMask = (1u << 1) | 1u;
+            }
+
+            if (rng != null && foliage != null)
+            {
+                IvyAlong(foliage, a, rng, center, along, -inward, thickness, full, door ? doorWidth : 0f);
+            }
+        }
+
+        /// <summary>
+        /// Ivy on the outer face of a wall: nobody has trimmed it for a while. A few patches along the
+        /// base, some sending runners up between the windows, none across the entrance.
+        /// </summary>
+        private static void IvyAlong(Transform parent, GameAssets a, System.Random rng, Vector3 wallCenter, Vector3 along, Vector3 outward, float thickness, float length, float keepClear)
+        {
+            int patches = rng.NextDouble() < 0.3 ? 0 : 1 + rng.Next(3);
+            for (int p = 0; p < patches; p++)
+            {
+                float height = Rand(rng, 0.7f, 1.7f);
+                int tiles = 1 + rng.Next(3);
+                float span = tiles * FoliageLibrary.IvyTileWidth * 0.85f;
+                float start = Rand(rng, -length / 2f + 0.8f, length / 2f - 0.8f - span);
+                for (int i = 0; i < tiles; i++)
+                {
+                    float offset = start + (i + 0.5f) * FoliageLibrary.IvyTileWidth * 0.85f;
+                    if (keepClear > 0f && Mathf.Abs(offset) < keepClear / 2f + 1.6f)
+                    {
+                        continue;
+                    }
+
+                    GameObject ivy = FoliageLibrary.IvyTile(parent, a, rng, height * Rand(rng, 0.85f, 1.15f), rng.Next(6));
+                    ivy.transform.SetPositionAndRotation(wallCenter + along * offset + outward * (thickness / 2f), Quaternion.LookRotation(outward, Vector3.up));
+                    StreetPropLibrary.MarkExterior(ivy);
+                }
             }
         }
 
@@ -385,25 +596,35 @@ namespace Vent.Editor
             return Mathf.Min(halfWidth / ax, halfDepth / az);
         }
 
-        private static void BuildExterior(Transform root, GameAssets a, System.Random rng, float width, float depth, float height)
+        private static void BuildExterior(Transform root, GameAssets a, System.Random rng, float width, float depth, float height, Vector2 clearHalfExtents, bool apron)
         {
             Transform exterior = Child(root, "Exterior");
             const uint exteriorRenderingLayer = 1u << 1;
+            bool district = clearHalfExtents.sqrMagnitude > 0f;
+            Vector2 clear = district ? clearHalfExtents : new Vector2(width / 2f + 4f, depth / 2f + 4f);
 
-            GameObject ground = PrefabFactory.Primitive(PrimitiveType.Cube, "Ground", exterior, new Vector3(0f, -0.3f, 0f), new Vector3(400f, 0.2f, 400f), a.Asphalt, collider: true);
+            // Ground: world-scale UVs (Block) so the asphalt tiles per metre rather than stretching once over 800 m.
+            GameObject ground = Block(exterior, "Ground", new Vector3(0f, -0.3f, 0f), new Vector3(800f, 0.2f, 800f), district ? a.Dirt : a.Asphalt);
             ground.GetComponent<Renderer>().renderingLayerMask = exteriorRenderingLayer | 1u;
-            // Pavement apron and kerb right outside the glass so the ground reads at close range.
-            GameObject apron = PrefabFactory.Primitive(PrimitiveType.Cube, "Apron", exterior, new Vector3(0f, -0.17f, 0f), new Vector3(width + 8f, 0.06f, depth + 8f), a.Concrete, collider: false);
-            apron.GetComponent<Renderer>().renderingLayerMask = exteriorRenderingLayer | 1u;
+            GameObject apronGo = null;
+            if (apron)
+            {
+                // Pavement apron and kerb right outside the glass so the ground reads at close range;
+                // walkable, so the front door leads somewhere even without a district.
+                apronGo = Block(exterior, "Apron", new Vector3(0f, -0.15f, 0f), new Vector3(width + 8f, 0.3f, depth + 8f), a.Concrete);
+                apronGo.GetComponent<Renderer>().renderingLayerMask = exteriorRenderingLayer | 1u;
+            }
 
             for (int i = 0; i < 14; i++)
             {
                 float angle = i * (360f / 14f) + (float)rng.NextDouble() * 15f;
-                var size = new Vector3(8f + (float)rng.NextDouble() * 14f, 6f + (float)rng.NextDouble() * 22f, 8f + (float)rng.NextDouble() * 14f);
-                // Measured from the building's edge in this direction (not its centre), so a bigger
-                // building never ends up with a neighbour standing inside its rooms.
+                // Bigger silhouettes when they stand beyond a district: they have to read from 250 m.
+                float scale = district ? 1.8f : 1f;
+                var size = new Vector3((8f + (float)rng.NextDouble() * 14f) * scale, (6f + (float)rng.NextDouble() * 22f) * scale, (8f + (float)rng.NextDouble() * 14f) * scale);
+                // Measured from the clear area's edge in this direction (not its centre), so a bigger
+                // building never ends up with a neighbour standing inside its rooms or its streets.
                 Vector3 dir = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
-                float edge = RectangleRadius(dir, width / 2f + 4f, depth / 2f + 4f);
+                float edge = RectangleRadius(dir, clear.x, clear.y);
                 float blockRadius = Mathf.Max(size.x, size.z) * 0.71f; // half-diagonal: it is rotated below
                 float dist = edge + blockRadius + ExteriorGap + (float)rng.NextDouble() * 45f;
                 Vector3 pos = dir * dist;
@@ -429,18 +650,30 @@ namespace Vent.Editor
             sun.type = LightType.Directional;
             sun.color = new Color(1f, 0.62f, 0.38f);
             sun.intensity = 1.6f;
-            sun.shadows = LightShadows.None;
+            // Soft shadows now that there is a street to stand in. Stays Realtime (never Mixed): baked
+            // GI ignores rendering layers, so a baked sun would pour dusk bounce through the windows
+            // into every lightmap.
+            sun.shadows = LightShadows.Soft;
+            sun.shadowStrength = 0.85f;
             // URP takes a light's rendering layers from its UniversalAdditionalLightData, not from
-            // Light.renderingLayerMask. Exterior only: interiors are lit through the windows.
+            // Light.renderingLayerMask. The sun *lights* the exterior layer only (interiors are lit
+            // through the windows), but *everything* casts its shadow: otherwise the roof would not
+            // block it from a zombie or a car standing in a sunlit room.
             sun.renderingLayerMask = (int)exteriorRenderingLayer;
             UniversalAdditionalLightData sunData = sun.GetUniversalAdditionalLightData();
             sunData.renderingLayers = exteriorRenderingLayer;
-            sunData.customShadowLayers = false;
+            sunData.customShadowLayers = true;
+            sunData.shadowRenderingLayers = uint.MaxValue;
             RenderSettings.sun = sun;
 
             foreach (Transform child in exterior.GetComponentsInChildren<Transform>())
             {
                 child.gameObject.layer = 0; // Default: no NavMesh, no bullet hits, no occlusion queries
+            }
+
+            if (apronGo != null)
+            {
+                apronGo.layer = Layers.EnvironmentIndex; // the one exterior surface that is walkable
             }
         }
 
@@ -569,6 +802,7 @@ namespace Vent.Editor
                         for (int i = 0; i < Scaled(1); i++) if (rng.NextDouble() < 0.6) Wall(PropLibrary.Kind.Bookshelf);
                         if (rng.NextDouble() < 0.5) Wall(PropLibrary.Kind.Whiteboard);
                         for (int i = 0; i < Scaled(1); i++) if (rng.NextDouble() < 0.6) Free(PropLibrary.Kind.PottedPlant, Rand(rng, 0f, 360f));
+                        if (rng.NextDouble() < 0.55) Corner(PropLibrary.Kind.PlantLarge);
                         for (int i = 0; i < Scaled(1); i++) if (rng.NextDouble() < 0.4) Free(PropLibrary.Kind.CubicleWall, rng.Next(2) * 90f);
                         break;
 
@@ -598,7 +832,8 @@ namespace Vent.Editor
 
                         Wall(PropLibrary.Kind.Whiteboard);
                         Wall(PropLibrary.Kind.WaterCooler);
-                        for (int i = 0; i < Scaled(1); i++) if (rng.NextDouble() < 0.7) Free(PropLibrary.Kind.PottedPlant, Rand(rng, 0f, 360f));
+                        if (rng.NextDouble() < 0.8) Corner(PropLibrary.Kind.PlantLarge);
+                        for (int i = 0; i < Scaled(1); i++) if (rng.NextDouble() < 0.6) Corner(PropLibrary.Kind.PottedPlant);
                         if (area > 1.5f) Wall(PropLibrary.Kind.Bookshelf);
                         Litter();
                         break;
@@ -627,6 +862,7 @@ namespace Vent.Editor
                         }
 
                         for (int i = 0; i < Scaled(1); i++) if (rng.NextDouble() < 0.6) Free(PropLibrary.Kind.PottedPlant, Rand(rng, 0f, 360f));
+                        if (rng.NextDouble() < 0.6) Corner(PropLibrary.Kind.PlantLarge);
                         break;
 
                     case RoomType.Lobby:
@@ -634,7 +870,8 @@ namespace Vent.Editor
                         Wall(PropLibrary.Kind.ReceptionCounter);
                         for (int i = 0; i < Scaled(1); i++) Wall(PropLibrary.Kind.Couch);
                         if (rng.NextDouble() < 0.7) Wall(PropLibrary.Kind.Couch);
-                        for (int i = 0; i < Scaled(2); i++) Free(PropLibrary.Kind.PottedPlant, Rand(rng, 0f, 360f));
+                        for (int i = 0; i < Scaled(2); i++) Corner(PropLibrary.Kind.PlantLarge);
+                        for (int i = 0; i < Scaled(1); i++) Free(PropLibrary.Kind.PottedPlant, Rand(rng, 0f, 360f));
                         for (int i = 0; i < Scaled(1); i++) Wall(PropLibrary.Kind.Bookshelf);
                         if (area > 1.5f) Wall(PropLibrary.Kind.Whiteboard);
                         Wall(PropLibrary.Kind.TrashBin);
@@ -718,6 +955,26 @@ namespace Vent.Editor
                         {
                             return Spawn(kind, pos, Quaternion.LookRotation(normal), fp);
                         }
+                    }
+                }
+
+                return null;
+            }
+
+            /// <summary>Into a corner of the room, turned to face the middle: where a big plant goes.</summary>
+            private GameObject Corner(PropLibrary.Kind kind)
+            {
+                Vector2 fp = PropLibrary.Footprint(kind);
+                float inset = cell / 2f - wall / 2f - Mathf.Max(fp.x, fp.y) / 2f - 0.25f;
+                var corners = new List<Vector3> { new(-inset, 0f, -inset), new(inset, 0f, -inset), new(-inset, 0f, inset), new(inset, 0f, inset) };
+                Shuffle(corners, rng);
+                foreach (Vector3 corner in corners)
+                {
+                    Vector3 pos = center + corner;
+                    if (Fits(pos, fp))
+                    {
+                        float yaw = Mathf.Atan2(-corner.x, -corner.z) * Mathf.Rad2Deg + Rand(rng, -20f, 20f);
+                        return Spawn(kind, pos, Quaternion.Euler(0f, yaw, 0f), fp);
                     }
                 }
 

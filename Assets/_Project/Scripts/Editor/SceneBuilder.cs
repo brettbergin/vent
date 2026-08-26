@@ -16,7 +16,10 @@ using Vent.Enemies.Spawning;
 using Vent.Gameplay.Flow;
 using Vent.Gameplay.Levels;
 using Vent.Gameplay.Perks;
+using Vent.Gameplay.Vehicles;
+using Vent.Gameplay.World;
 using Vent.Player;
+using Vent.Vehicles.Runtime;
 using Vent.UI;
 using Vent.UI.Screens;
 
@@ -52,6 +55,8 @@ namespace Vent.Editor
             a.ImpactPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{Paths.Prefabs}/VFX_Impact.prefab");
             a.BloodImpactPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{Paths.Prefabs}/VFX_BloodImpact.prefab");
             a.ShellCasingPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{Paths.Prefabs}/VFX_ShellCasing.prefab");
+            a.SedanPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{Paths.Prefabs}/Vehicle_Sedan.prefab");
+            a.VanPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{Paths.Prefabs}/Vehicle_Van.prefab");
         }
 
         public static void BuildAll(GameAssets a)
@@ -89,7 +94,7 @@ namespace Vent.Editor
             ui.transform.SetParent(app.transform, false);
 
             HudScreen hud = Screen<HudScreen>(ui.transform, "HUD", a, "Hud.uxml", 0);
-            hud.Configure(a.Health, a.WeaponHud, a.WeaponLevelUp, a.Hit, a.Level, a.KillsThisLevel, a.PerkCollected);
+            hud.Configure(a.Health, a.WeaponHud, a.WeaponLevelUp, a.Hit, a.Level, a.KillsThisLevel, a.PerkCollected, a.Prompt, a.Announcement, a.VehicleSpeed);
             hud.ConfigureVisibility(a.GameState, GameState.Playing);
 
             MainMenuScreen menu = Screen<MainMenuScreen>(ui.transform, "MainMenu", a, "MainMenu.uxml", 5);
@@ -183,7 +188,7 @@ namespace Vent.Editor
             Scene scene = NewScene(lighting);
             ApplyInteriorRenderSettings();
 
-            var layout = new BuildingLayout { Columns = 1, Rows = 1, Seed = 42, BakeNavMesh = false };
+            var layout = new BuildingLayout { Columns = 1, Rows = 1, Seed = 42, BakeNavMesh = false, FrontDoor = false };
             BuildingGenerator.Result room = BuildingGenerator.Generate(a, layout);
 
             // A dormant zombie under a vent, for atmosphere.
@@ -219,7 +224,16 @@ namespace Vent.Editor
             Scene scene = NewScene(lighting);
             ApplyInteriorRenderSettings();
 
-            BuildingGenerator.Result building = BuildingGenerator.Generate(a, new BuildingLayout());
+            // The building first (its skyline pushed out past the district), then the district's streets,
+            // then one NavMesh over everything walkable, then the door leaves (which must not be baked
+            // in) — see BuildingGenerator.BakeNavMesh.
+            var districtLayout = new DistrictLayout();
+            var layout = new BuildingLayout { BakeNavMesh = false, Apron = false, ExteriorClearHalfExtents = DistrictGenerator.HalfExtents(districtLayout) };
+            BuildingGenerator.Result building = BuildingGenerator.Generate(a, layout);
+            DistrictGenerator.Result district = DistrictGenerator.Generate(a, districtLayout, building);
+            BuildingGenerator.BakeNavMesh(building.Root);
+            BuildingGenerator.BuildFrontDoor(a, building, a.Level, a.Announcement, district.ExteriorVents);
+            VehiclePlacer.Place(a, district.ParkingSpots, null, districtLayout.Seed);
 
             var systems = new GameObject("Systems");
             systems.transform.position = building.PlayerSpawn; // pooled instances are parked here, on the NavMesh
@@ -244,6 +258,21 @@ namespace Vent.Editor
             var player = playerGo.GetComponent<PlayerCharacter>();
 
             systems.AddComponent<BuildingSceneController>().Configure(director, spawnPoint, player);
+
+            // Outdoors is graded a touch brighter and less muted; the Atmosphere fades this volume in
+            // (and the fog out) as the player steps through the front door.
+            var outdoorGo = new GameObject("PostProcessingOutdoor");
+            Volume outdoor = outdoorGo.AddComponent<Volume>();
+            outdoor.isGlobal = true;
+            outdoor.priority = 1f;
+            outdoor.weight = 0f;
+            outdoor.sharedProfile = BuildOutdoorPostProfile();
+            systems.AddComponent<Atmosphere>().Configure(building.Footprint, player.Inventory, outdoor);
+
+            var chaseGo = new GameObject("ChaseCamera");
+            chaseGo.transform.SetParent(systems.transform, false);
+            var chase = chaseGo.AddComponent<VehicleChaseCamera>();
+            systems.AddComponent<VehicleDriver>().Configure(player, a.InputReader, chase, a.VehicleSpeed, a.Prompt, a.PlayerDied, a.Level);
 
             Save(scene, Paths.BuildingScene);
             Bake(scene, Paths.BuildingScene);
@@ -357,6 +386,31 @@ namespace Vent.Editor
             FilmGrain grain = Add<FilmGrain>();
             grain.type.Override(FilmGrainLookup.Thin1);
             grain.intensity.Override(0.2f);
+
+            EditorUtility.SetDirty(profile);
+            AssetDatabase.SaveAssets();
+            return profile;
+        }
+
+        /// <summary>The outdoor overlay on top of the shared profile: dusk is brighter and warmer than the office.</summary>
+        private static VolumeProfile BuildOutdoorPostProfile()
+        {
+            AssetDatabase.DeleteAsset(Paths.OutdoorPostProcessProfile);
+            var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+            profile.name = "VentPostFxOutdoor";
+            AssetDatabase.CreateAsset(profile, Paths.OutdoorPostProcessProfile);
+
+            ColorAdjustments color = profile.Add<ColorAdjustments>();
+            color.name = nameof(ColorAdjustments);
+            AssetDatabase.AddObjectToAsset(color, profile);
+            color.postExposure.Override(1.0f);
+            color.saturation.Override(-4f);
+            color.colorFilter.Override(new Color(1f, 0.97f, 0.94f));
+
+            Vignette vignette = profile.Add<Vignette>();
+            vignette.name = nameof(Vignette);
+            AssetDatabase.AddObjectToAsset(vignette, profile);
+            vignette.intensity.Override(0.12f);
 
             EditorUtility.SetDirty(profile);
             AssetDatabase.SaveAssets();

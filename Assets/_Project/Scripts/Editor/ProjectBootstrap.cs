@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using Vent.Core.Utility;
 
 namespace Vent.Editor
@@ -20,6 +22,8 @@ namespace Vent.Editor
             EnsureFolders();
             EnsureLayers();
             ConfigureCollisionMatrix();
+            ConfigurePhysicsWorldBounds();
+            ConfigureRenderPipeline();
             ConfigurePlayerSettings();
             ConfigureAmbientOcclusion();
             ConfigureBuildScenes();
@@ -101,15 +105,20 @@ namespace Vent.Editor
         /// twice; everything else uses the defaults.
         /// </summary>
         /// <summary>
-        /// Defines which physics layers may generate contacts. Three pairs are disabled:
+        /// Defines which physics layers may generate contacts. The disabled pairs:
         ///  - the view-model layer collides with nothing (it is render-only);
         ///  - zombies do not collide with each other or with vents (they separate via NavMesh
         ///    avoidance, not physics);
-        ///  - zombies do not collide with the player. This last one matters: the player is a
+        ///  - zombies do not collide with the player. This one matters: the player is a
         ///    CharacterController, and Move()'s penetration recovery ejects it out of any colliders
         ///    it overlaps. A crowd of zombies pressing in could otherwise squeeze the controller
         ///    straight through a wall and out of the building. Zombie damage is applied in code
-        ///    (see Zombie.TryStrike), so removing the physical contact costs nothing.
+        ///    (see Zombie.TryStrike), so removing the physical contact costs nothing;
+        ///  - cars do not collide with zombies for the same reason in reverse: a zombie is a
+        ///    NavMeshAgent with static hitbox colliders, so a Rigidbody car would bounce off it as
+        ///    if it were a bollard. Roadkill is an overlap query applied in code (VehicleRoadkill);
+        ///  - cars do not collide with vents: outdoor manhole covers are Vent-layer colliders that
+        ///    exist only so bullets can hit them, and would otherwise be a bump in the road.
         /// </summary>
         private static void ConfigureCollisionMatrix()
         {
@@ -117,7 +126,8 @@ namespace Vent.Editor
             int zombie = Layers.ZombieIndex;
             int vent = Layers.VentIndex;
             int player = Layers.PlayerIndex;
-            if (weaponView < 0 || zombie < 0 || vent < 0 || player < 0)
+            int vehicle = Layers.VehicleIndex;
+            if (weaponView < 0 || zombie < 0 || vent < 0 || player < 0 || vehicle < 0)
             {
                 throw new System.InvalidOperationException("Layers were not created; run EnsureLayers first.");
             }
@@ -131,6 +141,8 @@ namespace Vent.Editor
             ignored.Add((zombie, zombie));
             ignored.Add((zombie, vent));
             ignored.Add((zombie, player));
+            ignored.Add((vehicle, zombie));
+            ignored.Add((vehicle, vent));
 
             foreach ((int a, int b) in ignored)
             {
@@ -163,6 +175,47 @@ namespace Vent.Editor
 
                 so.ApplyModifiedPropertiesWithoutUndo();
             }
+        }
+
+        /// <summary>
+        /// PhysX culls anything outside the world bounds. The default ±250 m covered the building;
+        /// the district reaches ±193 m and the ground plane further, so give the simulation room.
+        /// Written through the serialized asset so a headless run persists it.
+        /// </summary>
+        private static void ConfigurePhysicsWorldBounds()
+        {
+            const float extent = 400f;
+            Object dynamics = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/DynamicsManager.asset")[0];
+            var so = new SerializedObject(dynamics);
+            SerializedProperty bounds = so.FindProperty("m_WorldBounds");
+            if (bounds == null)
+            {
+                Debug.LogWarning("[Vent] DynamicsManager has no m_WorldBounds; physics world bounds left at default.");
+                return;
+            }
+
+            bounds.FindPropertyRelative("m_Center").vector3Value = Vector3.zero;
+            bounds.FindPropertyRelative("m_Extent").vector3Value = new Vector3(extent, extent, extent);
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>
+        /// The sun casts real shadows now that there is an outdoors to stand in; its cascades must
+        /// reach across a city block, and the window lights must stay shadowed across the office
+        /// (GeneratedSceneTests pins the floor). Code-owned like every other setting.
+        /// </summary>
+        private static void ConfigureRenderPipeline()
+        {
+            var asset = GraphicsSettings.defaultRenderPipeline as UniversalRenderPipelineAsset;
+            if (asset == null)
+            {
+                Debug.LogWarning("[Vent] Default render pipeline is not a URP asset; shadow distance left unchanged.");
+                return;
+            }
+
+            asset.shadowDistance = 90f;
+            asset.shadowCascadeCount = 4;
+            EditorUtility.SetDirty(asset);
         }
 
         private static void ConfigurePlayerSettings()

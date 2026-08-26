@@ -12,7 +12,8 @@
     "Unity.AI.Navigation",
     "Unity.RenderPipelines.Core.Runtime",
     "Unity.RenderPipelines.Universal.Runtime",
-    "UnityEngine.UI"
+    "UnityEngine.UI",
+    "Vent.Vehicles"
   ],
   "includePlatforms": [
     "Editor"

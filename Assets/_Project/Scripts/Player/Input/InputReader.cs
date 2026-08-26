@@ -29,6 +29,8 @@ namespace Vent.Player.Input
         public bool SprintHeld { get; private set; }
         public bool FireHeld { get; private set; }
         public bool AimHeld { get; private set; }
+        /// <summary>Jump held down; on foot it is a press, in a car it is the handbrake.</summary>
+        public bool JumpHeld { get; private set; }
 
         // --- Gameplay (events) ---
         public event Action JumpPressed;
@@ -41,6 +43,8 @@ namespace Vent.Player.Input
         public event Action<int> WeaponCycled;
         public event Action WeaponSwapPressed;
         public event Action PausePressed;
+        /// <summary>Use what you are looking at: open the door, get in or out of a car.</summary>
+        public event Action InteractPressed;
 
         // --- UI (events) ---
         public event Action UnpausePressed;
@@ -48,7 +52,7 @@ namespace Vent.Player.Input
         private InputActionMap gameplay;
         private InputActionMap ui;
 
-        private InputAction move, look, lookAnalog, jump, sprint, fire, aim, reload, weapon1, weapon2, cycle, swap, pause, unpause;
+        private InputAction move, look, lookAnalog, jump, sprint, fire, aim, reload, weapon1, weapon2, cycle, swap, pause, interact, unpause;
 
         private const float ScrollNotch = 1f;
         private const float ScrollCooldown = 0.15f;
@@ -83,6 +87,7 @@ namespace Vent.Player.Input
             cycle = gameplay.FindAction("CycleWeapon", true);
             swap = gameplay.FindAction("SwapWeapon", true);
             pause = gameplay.FindAction("Pause", true);
+            interact = gameplay.FindAction("Interact", true);
             unpause = ui.FindAction("Unpause", true);
 
             move.performed += OnMove;
@@ -92,6 +97,7 @@ namespace Vent.Player.Input
             lookAnalog.performed += OnLookAnalog;
             lookAnalog.canceled += OnLookAnalog;
             jump.performed += OnJump;
+            jump.canceled += OnJumpReleased;
             sprint.performed += OnSprint;
             sprint.canceled += OnSprint;
             fire.performed += OnFire;
@@ -104,6 +110,7 @@ namespace Vent.Player.Input
             cycle.performed += OnCycle;
             swap.performed += OnSwap;
             pause.performed += OnPause;
+            interact.performed += OnInteract;
             unpause.performed += OnUnpause;
         }
 
@@ -121,6 +128,7 @@ namespace Vent.Player.Input
             lookAnalog.performed -= OnLookAnalog;
             lookAnalog.canceled -= OnLookAnalog;
             jump.performed -= OnJump;
+            jump.canceled -= OnJumpReleased;
             sprint.performed -= OnSprint;
             sprint.canceled -= OnSprint;
             fire.performed -= OnFire;
@@ -133,6 +141,7 @@ namespace Vent.Player.Input
             cycle.performed -= OnCycle;
             swap.performed -= OnSwap;
             pause.performed -= OnPause;
+            interact.performed -= OnInteract;
             unpause.performed -= OnUnpause;
 
             DisableAll();
@@ -170,6 +179,7 @@ namespace Vent.Player.Input
             LookAnalog = Vector2.zero;
             SprintHeld = false;
             AimHeld = false;
+            JumpHeld = false;
             if (FireHeld)
             {
                 FireHeld = false;
@@ -196,7 +206,13 @@ namespace Vent.Player.Input
             LookAnalog = ctx.ReadValue<Vector2>();
         }
 
-        private void OnJump(InputAction.CallbackContext ctx) => JumpPressed?.Invoke();
+        private void OnJump(InputAction.CallbackContext ctx)
+        {
+            JumpHeld = true;
+            JumpPressed?.Invoke();
+        }
+
+        private void OnJumpReleased(InputAction.CallbackContext ctx) => JumpHeld = false;
         private void OnSprint(InputAction.CallbackContext ctx) => SprintHeld = ctx.ReadValueAsButton();
 
         private void OnFire(InputAction.CallbackContext ctx)
@@ -243,6 +259,7 @@ namespace Vent.Player.Input
 
         private void OnSwap(InputAction.CallbackContext ctx) => WeaponSwapPressed?.Invoke();
         private void OnPause(InputAction.CallbackContext ctx) => PausePressed?.Invoke();
+        private void OnInteract(InputAction.CallbackContext ctx) => InteractPressed?.Invoke();
         private void OnUnpause(InputAction.CallbackContext ctx) => UnpausePressed?.Invoke();
 
         /// <summary>

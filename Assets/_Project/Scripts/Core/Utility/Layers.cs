@@ -14,6 +14,8 @@ namespace Vent.Core.Utility
         public const string Vent = "Vent";
         public const string Projectile = "Projectile";
         public const string WeaponView = "WeaponView";
+        /// <summary>Cars: shootable and solid to the player, but they pass through zombies (roadkill is applied in code).</summary>
+        public const string Vehicle = "Vehicle";
 
         public static int PlayerIndex => LayerMask.NameToLayer(Player);
         public static int ZombieIndex => LayerMask.NameToLayer(Zombie);
@@ -21,15 +23,19 @@ namespace Vent.Core.Utility
         public static int VentIndex => LayerMask.NameToLayer(Vent);
         public static int ProjectileIndex => LayerMask.NameToLayer(Projectile);
         public static int WeaponViewIndex => LayerMask.NameToLayer(WeaponView);
+        public static int VehicleIndex => LayerMask.NameToLayer(Vehicle);
 
-        /// <summary>What bullets can hit: the world and zombies, never the player or the view-model.</summary>
-        public static int ShootableMask => LayerMask.GetMask(Environment, Zombie, Vent);
+        /// <summary>What bullets can hit: the world, zombies and cars, never the player or the view-model.</summary>
+        public static int ShootableMask => LayerMask.GetMask(Environment, Zombie, Vent, Vehicle);
 
-        /// <summary>What blocks line of sight for spawn selection (walls and props only).</summary>
+        /// <summary>What blocks line of sight for spawn selection (walls and props only). Cars are deliberately not occluders: a driver is still visible.</summary>
         public static int OcclusionMask => LayerMask.GetMask(Environment);
 
-        /// <summary>All layer names the project needs, in a stable order (used by the bootstrap).</summary>
-        public static readonly string[] All = { Player, Zombie, Environment, Vent, Projectile, WeaponView };
+        /// <summary>What the player can look at and press Interact on: doors (Environment) and cars.</summary>
+        public static int InteractMask => LayerMask.GetMask(Environment, Vehicle);
+
+        /// <summary>All layer names the project needs, in a stable order (used by the bootstrap). Append only: indices are baked into scenes.</summary>
+        public static readonly string[] All = { Player, Zombie, Environment, Vent, Projectile, WeaponView, Vehicle };
 
         /// <summary>Set a layer on an object and all descendants.</summary>
         public static void SetRecursively(GameObject root, int layer)

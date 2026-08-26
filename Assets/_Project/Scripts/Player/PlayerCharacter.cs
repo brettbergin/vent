@@ -4,6 +4,7 @@ using Vent.Core.Damage;
 using Vent.Core.Events;
 using Vent.Core.Perks;
 using Vent.Core.Services;
+using Vent.Core.Utility;
 using Vent.Player.Camera;
 using Vent.Player.Health;
 using Vent.Player.Input;
@@ -29,6 +30,8 @@ namespace Vent.Player
         [Header("References")]
         [SerializeField] private InputReader input;
         [SerializeField] private UnityEngine.Camera viewCamera;
+        [SerializeField, Tooltip("The overlay camera that draws the first-person guns; off while driving (the pistol is out of the window instead).")]
+        private UnityEngine.Camera weaponCamera;
         [SerializeField] private WeaponInventory inventory;
         [SerializeField] private CameraMotion cameraMotion;
         [SerializeField, Tooltip("Height above the feet that enemies aim at.")]
@@ -47,23 +50,57 @@ namespace Vent.Player
         private Vector2 lookDeltaThisFrame;
         private Vector3 lastPosition;
         private bool controlsEnabled = true;
+        private float seatedMotion;
 
         public FirstPersonController Controller => controller;
         public PlayerLook Look => look;
         public PlayerHealth Health => health;
         public WeaponInventory Inventory => inventory;
         public UnityEngine.Camera ViewCamera => viewCamera;
+        public CameraMotion Motion => cameraMotion;
+        /// <summary>The camera's rest parent (pitch pivot); the chase rig returns the camera here.</summary>
+        public Transform CameraPivot => look != null ? look.PitchPivot : null;
+
+        /// <summary>True while sitting in a car: locomotion, containment and look are handed to the driver.</summary>
+        public bool IsSeated { get; private set; }
 
         /// <summary>Editor-time wiring used by the prefab factory.</summary>
-        public void Configure(InputReader reader, UnityEngine.Camera cam, WeaponInventory weapons, CameraMotion motion, LevelEventChannel levelEvent, PerkEventChannel perkEvent)
+        public void Configure(InputReader reader, UnityEngine.Camera cam, WeaponInventory weapons, CameraMotion motion, LevelEventChannel levelEvent, PerkEventChannel perkEvent,
+            UnityEngine.Camera overlayCamera = null)
         {
             perkCollected = perkEvent;
             input = reader;
             viewCamera = cam;
+            weaponCamera = overlayCamera;
             inventory = weapons;
             cameraMotion = motion;
             levelChanged = levelEvent;
         }
+
+        /// <summary>
+        /// Sit down in (or stand up from) a car. Keeps this component enabled and registered so zombies
+        /// still have a target; only the parts that assume feet on a floor are switched off.
+        /// </summary>
+        public void SetSeated(bool seated, IRecoilReceiver seatedRecoil)
+        {
+            IsSeated = seated;
+            controller.SetSeated(seated);
+            look.SeatedRecoil = seatedRecoil;
+            look.SetSeated(seated);
+            inventory?.SetSlotLock(seated);
+            if (weaponCamera != null)
+            {
+                weaponCamera.enabled = !seated;
+            }
+
+            if (!seated)
+            {
+                seatedMotion = 0f;
+            }
+        }
+
+        /// <summary>How fast the car is going (0..1): drives weapon spread while seated the way running does on foot.</summary>
+        public void SetSeatedMotion(float factor01) => seatedMotion = Mathf.Clamp01(factor01);
 
         // ----- IPlayerTarget -----
         Transform IPlayerTarget.Transform => transform;
@@ -76,11 +113,13 @@ namespace Vent.Player
         public Ray AimRay => viewCamera != null
             ? new Ray(viewCamera.transform.position, viewCamera.transform.forward)
             : new Ray(AimPoint, transform.forward);
-        public float MovementFactor => controller != null ? (controller.IsGrounded ? controller.Speed01 : 1f) : 0f;
+        public float MovementFactor => IsSeated ? seatedMotion : controller != null ? (controller.IsGrounded ? controller.Speed01 : 1f) : 0f;
         public bool IsAiming => controlsEnabled && input != null && input.AimHeld;
-        public bool IsGrounded => controller == null || controller.IsGrounded;
+        public bool IsGrounded => IsSeated || controller == null || controller.IsGrounded;
         public Vector2 LookDelta => lookDeltaThisFrame;
-        public Vector3 Velocity => controller != null ? controller.Velocity : Vector3.zero;
+        public Vector3 Velocity => controller != null && !IsSeated ? controller.Velocity : Vector3.zero;
+        /// <summary>Bullets never hit the car the player is sitting in: the ray starts inside it.</summary>
+        public int ShootMask => IsSeated ? Layers.ShootableMask & ~(1 << Layers.VehicleIndex) : Layers.ShootableMask;
 
         private void Awake()
         {
@@ -186,6 +225,13 @@ namespace Vent.Player
         /// <summary>Put the player back into a fresh state at the given spawn pose.</summary>
         public void ResetForNewRun(Vector3 position, float yawDegrees)
         {
+            if (IsSeated)
+            {
+                // Scenes reload between runs, so this is a belt-and-braces path; never spawn inside a car.
+                transform.SetParent(null, true);
+                SetSeated(false, null);
+            }
+
             controller.Teleport(position, Quaternion.Euler(0f, yawDegrees, 0f));
             look.SetRotation(yawDegrees, 0f);
             health.ResetToFull();

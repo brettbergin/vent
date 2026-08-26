@@ -127,9 +127,80 @@ namespace Vent.Core.Audio
                 case SoundId.PerkNuke:
                     // A deep boom with a long rumble; the whole building answers.
                     return Mix(Tone(1.4f, 110f, 28f, 2.5f, 0.9f), Lowpass(NoiseBurst(rng, 1.2f, 3.5f), 420f, 0.7f), Highpass(NoiseBurst(rng, 0.12f, 30f), 2000f, 0.5f));
+                case SoundId.DoorLocked:
+                    // Push bar shoved against a dead bolt: the bar rattles, the frame answers once.
+                    return Mix(Rattle(rng, 0.3f), Lowpass(NoiseBurst(rng, 0.08f, 70f), 1500f, 0.5f));
+                case SoundId.DoorUnlock:
+                    // Electric strike releasing, then a two-note chime from the card reader.
+                    return Mix(Lowpass(NoiseBurst(rng, 0.06f, 90f), 1200f, 0.7f), Tone(0.12f, 180f, 120f, 30f, 0.5f), Arpeggio(new[] { 659.25f, 987.77f }, 0.09f, 0.25f));
+                case SoundId.DoorOpen:
+                    // A slow hinge: a falling tone with a breath of air and the closer's click at the end.
+                    return Mix(Tone(0.7f, 320f, 210f, 3f, 0.18f), Lowpass(NoiseBurst(rng, 0.5f, 6f, 0.3f), 700f), Lowpass(NoiseBurst(rng, 0.05f, 120f), 2000f, 0.4f));
+                case SoundId.EngineLoop:
+                    return Engine(rng, seconds: 2f, baseHz: 55f);
+                case SoundId.CarStart:
+                    // Starter motor winding, then the engine catching.
+                    return Mix(Tone(0.5f, 40f, 55f, 3f, 0.6f), Lowpass(NoiseBurst(rng, 0.45f, 6f), 700f, 0.5f), Tone(0.35f, 30f, 60f, 4f, 0.4f));
+                case SoundId.CarDoor:
+                    // A car door: a dull thump with a latch click on top.
+                    return Mix(Lowpass(NoiseBurst(rng, 0.06f, 70f), 1500f, 0.8f), Tone(0.12f, 180f, 90f, 30f, 0.6f), Highpass(NoiseBurst(rng, 0.02f, 200f), 3000f, 0.3f));
+                case SoundId.CarImpact:
+                    // Sheet metal: a crunch, a low body thud and a bright sliver of glass.
+                    return Mix(Lowpass(NoiseBurst(rng, 0.25f, 14f), 1200f, 0.9f), Tone(0.3f, 90f, 40f, 12f, 0.8f), Highpass(NoiseBurst(rng, 0.05f, 90f), 3000f, 0.4f));
+                case SoundId.Roadkill:
+                    // A body against a bumper: a wet thud and a cut-off growl.
+                    return Mix(Lowpass(NoiseBurst(rng, 0.12f, 30f), 700f, 0.9f), Tone(0.18f, 120f, 50f, 20f, 0.7f), Growl(rng, 0.3f, 150f, 90f, 0.4f));
                 default:
                     return new float[SampleRate / 10];
             }
+        }
+
+        /// <summary>
+        /// A seamless engine loop: a saw at the base frequency with harmonics and a sub-octave, a slow
+        /// amplitude wobble, and some breath. Every component completes a whole number of cycles in
+        /// <paramref name="seconds"/> (55 Hz × 2 s = 110, the sub-octave 55, the wobble 22), so the
+        /// buffer loops without a click; the noise tail is cross-faded into the head for the same reason.
+        /// </summary>
+        private static float[] Engine(System.Random rng, float seconds, float baseHz)
+        {
+            int n = Mathf.RoundToInt(seconds * SampleRate);
+            var s = new float[n];
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)SampleRate;
+                float cycle = t * baseHz;
+                float saw = 2f * (cycle - Mathf.Floor(cycle)) - 1f;
+                float v = saw * 0.5f
+                          + Mathf.Sin(2f * Mathf.PI * baseHz * 2f * t) * 0.25f
+                          + Mathf.Sin(2f * Mathf.PI * baseHz * 3f * t) * 0.15f
+                          + Mathf.Sin(2f * Mathf.PI * baseHz * 4f * t) * 0.08f
+                          + Mathf.Sin(2f * Mathf.PI * baseHz * 0.5f * t) * 0.2f;
+                float wobble = 1f + 0.15f * Mathf.Sin(2f * Mathf.PI * 11f * t);
+                float breath = ((float)rng.NextDouble() * 2f - 1f) * 0.15f;
+                s[i] = v * wobble + breath;
+            }
+
+            Lowpass(s, 1800f);
+            float peak = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                peak = Mathf.Max(peak, Mathf.Abs(s[i]));
+            }
+
+            float k = peak > 0f ? 0.8f / peak : 1f;
+            for (int i = 0; i < n; i++)
+            {
+                s[i] *= k;
+            }
+
+            const int fade = 128;
+            for (int i = 0; i < fade; i++)
+            {
+                float u = i / (float)fade;
+                s[n - fade + i] = Mathf.Lerp(s[n - fade + i], s[i], u);
+            }
+
+            return s;
         }
 
         // ------------------------------------------------------------------ recipes
