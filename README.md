@@ -1,277 +1,151 @@
 # Vent
 
-A complete, self-contained first-person zombie survival game for **Unity 6.3 LTS (6000.3.22f1)**,
-built to read like production code. One sealed building, many rooms, zombies pouring out of the
-AC vents, two guns that level up from kills, and an endless ladder of levels where nothing changes
-except the numbers — until **level 4**, when the lobby's front door unlocks onto a five-by-five-block
-commercial district full of parked cars. Get in one, drive, and run the zombies over.
+A first-person zombie survival game for **Unity 6.3 LTS (6000.3.22f1)**, written to read like
+production code. One sealed office building, zombies pouring out of the AC vents, two guns that
+level up from kills, and a ladder of levels where only the numbers change — until the front door
+opens onto a five-by-five-block district full of cars. Get in one and run them over.
 
-Everything — level geometry, prefabs, materials, ScriptableObject data, scenes — is **generated
-from code** by editor scripts. There are no Asset Store downloads and no binary art; a clean
-checkout regenerates the whole project with one command.
+Everything — geometry, prefabs, meshes, textures, materials, data, scenes, sounds — is **generated
+from code**. There is no binary art in the repository; a clean checkout rebuilds the project with one
+command.
 
 ## Quick start
 
 ```bash
-make regen    # 1. Regenerate all assets/prefabs/scenes (Unity menu: Vent ▸ Rebuild Everything)
-make test     # 2. Run the test suites (EditMode: pure logic; PlayMode: end-to-end in the generated scene)
-make build    # 3. Build a macOS player into Builds/Vent.app (make build-windows for Windows x64)
-make run      #    ...and launch it
-make help     #    everything else (windowed test run, open in the editor, logs, clean)
+make regen    # regenerate every asset, prefab and scene   (Unity menu: Vent ▸ Rebuild Everything)
+make test     # EditMode (pure logic) + PlayMode (end to end in the generated scene), headless
+make build    # macOS player → Builds/Vent.app             (make build-windows for Windows x64)
+make run      # launch it
+make help     # everything else: windowed tests, editor, logs, GPU benchmark, clean
 ```
 
-The `make` targets wrap the scripts in `tools/`; call those directly if you prefer.
+Or open the project, run **Vent ▸ Rebuild Everything**, open `Assets/_Project/Scenes/Boot.unity`
+and press Play. The `make` targets wrap `tools/*.sh`; those are bash scripts.
 
-If a build feels slow, read the numbers before blaming it: the player writes `[FrameRateLog]` lines
-(scene, resolution, fps, mean and worst frame) to `~/Library/Logs/Vent Studio/Vent/Player.log` every
-five seconds, and `make gpubench` times a fixed workload on each GPU — a MacBook on a small charger
-with a flat battery caps its discrete GPU to a few percent, and no build runs well on that.
+| On foot | | Driving | |
+|---|---|---|---|
+| Move / sprint / jump | WASD · Shift · Space | Throttle / brake | W / S (hold S at a stop to reverse) |
+| Look / fire / aim | Mouse · LMB · RMB | Steer / handbrake | A D · Space |
+| Reload / switch weapon | R · 1 2 Q scroll | Look around | Mouse (the camera swings back behind the car) |
+| Interact | **E** — doors, cables, racks, drawers, cars | Fire out of the window | LMB (pistol only) |
+| Pause | Esc | Get out | E |
 
-Or open the project in the Editor, run **Vent ▸ Rebuild Everything**, open
-`Assets/_Project/Scenes/Boot.unity` and press Play.
+Gamepad is bound too (B = interact).
 
-Controls: WASD move · Shift sprint · Space jump · Mouse look · LMB fire · RMB aim · R reload ·
-1/2/Q/scroll switch weapon · **E interact** (read the whiteboard, take a cable, patch a rack, open a
-drawer, open the door, get in or out of a car) · Esc pause.
-Driving: W/S throttle and brake (hold S at a stop to reverse) · A/D steer · Space handbrake · mouse orbits the chase camera ·
-LMB fires the pistol out of the window. Gamepad is bound too (B = interact).
+## How it plays
 
-## The game loop
-
-```
-                 ┌────────────────────────────────────────────────────┐
-                 │                 DifficultyProfile (SO)             │
-                 │  level ─► kills-to-advance, HP×, DMG×, speed×,     │
-                 │           spawn interval, max concurrent, XP×      │
-                 └───────┬───────────────────────────┬────────────────┘
-                         │ Evaluate(level)           │ KillsRequired(level)
-                         ▼                           ▼
-   AirVent ◄──pick──  ZombieSpawner            LevelDirector ──LevelEventChannel──► HUD banner
-      │                  │ pool.Get              ▲   (LevelRules: count kills,      Player: refill ammo, heal
-      ▼                  ▼                       │    advance at N)                 Spawner: new snapshot
-   Zombie (NavMeshAgent state machine) ──KillEventChannel(Killer=Weapon)──┘
-      ▲                                              │
-      │ hitscan via Hitbox → IDamageable             ▼
-   Weapon ◄─── WeaponInventory.OnKill: GrantExperience → WeaponProgression → level up (damage×, mag×, …)
-```
-
-* The **environment never changes** (one generated building), the **zombie never changes** (one
-  definition), the **guns never change** (SMG + Pistol). Only `DifficultyProfile` curves and
-  `WeaponLevelCurve` curves move the numbers.
-* **Aggression is one of those numbers.** At level 1 zombies are merely annoyed: they shamble near
-  their vent until they see you up close, hear a shot nearby, or get hit. Every level they notice
-  from farther away, sense you through walls from farther away, re-path more often and strike
-  faster, until around level 13 they are enraged and always know where you are.
-  (`DifficultyProfile.Aggression` → `ZombieStats.From` → `Zombie` states `Wandering`/`Chasing`.)
-* Zombie damage is `baseDamage × DamageMultiplier(level)`; zombies already alive are re-scaled when
-  the level changes, so damage is always relative to the level being played.
-* **The front door and the district.** Levels 1–3 are the building. At level 4 the lobby's double
-  glass doors unlock (`Gameplay/World/FrontDoor`, rule in the engine-free `FrontDoorState`) — or the
-  player finds the key and leaves early (see **Two ways out** below); press E
-  and they swing open onto a 5×5-block district — streets, sidewalks, parking lots, storefronts, towers,
-  a supermarket, a gas station, a park, a construction site, all generated by
-  `Editor/DistrictGenerator.cs` from the same cubes-and-cylinders kit as the offices
-  (`StreetPropLibrary`). Every walkable and drivable surface is Environment, so it is NavMesh and the
-  player's containment accepts it. Opening the door also switches on the outdoor spawn points
-  (manholes and storm drains are `AirVent`s that start underground), and the `Atmosphere` fades the
-  office haze into a dusk that still reads at three hundred metres.
-* **Two ways out.** Grinding four levels for the door is a wall, not a choice, so there is a second
-  route open from level 1: a chain the player has to notice rather than farm.
-  Read the hint on the **lobby whiteboard** (real generated letters on the board — `Editor/GlyphFont.cs`
-  draws a 5×7 bitmap font into `TextureFactory.WhiteboardHint`, because there is no font asset to
-  import) → find **three patch cables** coiled on shelves and desktops → plug them into the **patch
-  panel** on one rack in a **server room** → exactly one desk's **monitor comes back up** → open that
-  desk's **drawer** and take the **front door key**, which turns the lock at any level.
-  The rule is engine-free (`Gameplay/World/KeyHuntState`) and `FrontDoorState` tracks the two unlock
-  causes apart, so using the key at level 2 does not announce a second unlock on the way past level 4.
-
-  **The key moves every run.** The building is baked at regen from one seed, so anything decided
-  there would hide the key in the same drawer for ever and the player would beeline to it on run two.
-  Instead `BuildingGenerator.BuildKeyQuest` places *every* candidate — a sliding drawer on each desk,
-  a patch panel on each rack, a coil on every flat surface the dresser passed — and
-  `KeyHuntDirector.BeginRun` picks among them at runtime, once per run
-  (`BuildingSceneController.BeginRun`). Nothing moves; the roll only decides what is shown, what is
-  lit and what has a key in it. Drawers open freely whenever the player asks — the key simply does not
-  exist until the servers are patched, so opening all thirty-odd of them early finds stationery.
-  The current step stands on the HUD over `Evt_Objective`.
-* **Cars.** Twenty are parked on the bays nearest the door (the red sedan is the hero; the rest are a
-  seeded mix of sedans, hatchbacks, SUVs, pickups and panel vans). Each body is a *loft* grown from a
-  station list in `Editor/CarBodyLibrary.cs` — half-width, belt line and roof height along the length,
-  swept into a hull with a rocker, side bulge, window sill, tumblehome and crowned roof, wheel wells cut
-  into the sills, and the glass as its own submesh (the roof surface becomes the windscreen where it
-  slopes to the belt; segments between the pillars are windows). Revolved tyres, dished spoked rims,
-  clear-coat paint (URP Complex Lit), bumpers, grille, lamps in bezels, plates, mirrors, handles,
-  wipers and an interior finish it; `Vent ▸ Snapshot Cars` renders every style to `Logs/snapshot-Car_*.png`.
-  `E` gets in:
-  the player root rides the seat (so zombies keep chasing), the camera moves to a third-person chase
-  rig (`VehicleChaseCamera`), the SMG is locked away and the pistol goes out of the window
-  (`WeaponInventory.EnterVehicleMode`, `VehicleDriveByArm`). `VehicleController` is a Rigidbody with
-  four *probe* wheels and no WheelColliders: each physics step it sweeps a tyre-sized sphere down each
-  suspension, applies a spring at the hardpoint and a tyre force at the contact, and hands the numbers
-  to engine-free models in `Vehicles/Simulation` — `TyreModel` (grip against slip angle, a friction
-  circle, never pushing a patch past zero sideways), `SuspensionModel`, `SteeringModel` (lock shrinks
-  with speed to a lateral-g budget, rate-limited, Ackermann), `Drivetrain` (torque curve, four-speed
-  automatic, clutch slip at rest, a limiter you lean on). Cornering forces act at the height of the
-  centre of mass, so steering can push the car sideways but can never roll it; anti-roll bars keep it
-  flat over kerbs, a yaw assist turns it toward the line the wheel asks for and an upright torque levels
-  it after a knock. Body roll, squat and dive are painted on the visual body (`VehicleBodyMotion`);
-  headlamps come on with the engine and the tail lamps brighten under braking (`VehicleLights`); the
-  engine loop follows the real RPM through the gears and a tyre loop swells with the slip (`VehicleAudio`).
-  Parked cars are kinematic. `VehicleRoadkill` sweeps a box each physics step and applies speed-scaled
-  damage in code — fatal above 9 m/s — because zombies are NavMeshAgents nothing can push
-  (`DamageKind.Vehicle`; the body is flung by `ZombieAnimator.PlayRoadkill`). Roadkill counts for the
-  level but grants no weapon XP, like the Nuke perk. `Gameplay/Vehicles/VehicleDriver` is the only class
-  that sees both the player and the car; the vehicles assembly depends on Core alone.
-  `VehicleHandlingTests` drives the sedan on a proving ground and asserts it reaches its top speed
-  through the gears, stops, holds full lock at top speed on all four wheels, slides on the handbrake,
-  takes a kerb at speed without leaving the ground, reverses, and runs straight hands-off.
-* **Perks.** A weapon kill has a chance (`PerkDropTable`, default 12%) to leave a glowing orb where
-  the zombie fell; walk through it to collect. Instant Reload tops up both guns at once, Invulnerable
-  (10 s) ignores damage, One Shot (8 s) makes any hit lethal, Nuke kills every zombie in the building
-  (those kills count toward the level, but not toward weapon XP, and never drop more perks).
-  Orbs fade after 25 s and at most three lie around at once. (`Core/Perks`, `Gameplay/Perks/PerkSystem`,
-  `Evt_PerkCollected` → player / weapons / HUD.)
+- **Levels.** `DifficultyProfile` is the whole progression model: per level it sets kills to
+  advance, zombie HP, damage, speed, spawn rate, concurrency, XP — and *aggression*. Level-1
+  zombies shamble near their vent until you get close, shoot nearby, or hit them; by level 13 they
+  always know where you are. The building, the zombie and the guns never change.
+- **Guns.** SMG and pistol level up from kills (`WeaponProgression`): damage, magazine, handling.
+  Chambered round, staged reloads, recoil that climbs, damage falloff — all pure arithmetic.
+- **Perks.** A kill may drop an orb: Instant Reload, Invulnerable, One Shot, Nuke.
+- **Two ways out.** The front door unlocks at level 4. Or, from level 1: read the lobby whiteboard,
+  find three patch cables, patch the server rack, find the one desk whose monitor comes back, take
+  the key from its drawer. The key hunt re-rolls every run (`KeyHuntDirector`).
+- **The district.** Streets, lots, shops, towers, a park and a construction site, generated from the
+  same kit as the offices. Outdoor vents (manholes, drains) wake when the door opens.
+- **Cars.** Twenty parked near the door: a red hero sedan plus a mix of hatchbacks, SUVs, pickups
+  and vans. Driving is a custom probe-wheel model (no WheelColliders) with a gearbox, a yaw assist
+  and cornering that physically cannot roll the car; the pistol goes out of the window; running a
+  zombie over is lethal above 9 m/s and counts for the level, not for weapon XP.
 
 ## Architecture
 
-Assemblies (`.asmdef`) enforce the dependency direction; arrows point at dependencies.
+Assemblies enforce the dependency direction; arrows point at dependencies.
 
 ```
-Vent.Editor ─► everything (generators; editor-only)
-Vent.Gameplay ─► Player, Weapons, Enemies, Vehicles, Core (GameManager, LevelDirector, FrontDoor, KeyHuntDirector, Atmosphere, VehicleDriver)
-Vent.Vehicles ─► Core                                (car physics, seat, roadkill, chase camera, engine audio)
-Vent.Player   ─► Weapons, Core                       (controller, look, health, input reader, interactor)
-Vent.Weapons  ─► Core                                (definitions, progression, hitscan, view-model)
-Vent.Enemies  ─► Core                                (zombie AI, spawner, vents)
-Vent.UI       ─► Core                                (UI Toolkit screens; only listens to channels)
-Vent.Core                                            (events, pooling, damage, services, data, audio)
+Vent.Editor    ─► everything      generators; editor only
+Vent.Gameplay  ─► all below       GameManager, LevelDirector, FrontDoor, KeyHuntDirector, VehicleDriver
+Vent.Vehicles  ─► Core            car simulation, seat, roadkill, chase camera, lights, audio
+Vent.Player    ─► Weapons, Core   controller, look, health, input, interaction
+Vent.Weapons   ─► Core            definitions, progression, hitscan, view-model
+Vent.Enemies   ─► Core            zombie AI, spawner, vents
+Vent.UI        ─► Core            UI Toolkit screens; only listen to channels
+Vent.Core                         events, pooling, damage, services, data, audio, perks
 ```
 
-Patterns you will see, and why:
+Patterns you will meet, and why they are there:
 
 | Pattern | Where | Why |
 |---|---|---|
-| **ScriptableObject event channels** | `Core/Events` | Producers and consumers never reference each other. The HUD, the player and the spawner all react to `Evt_LevelChanged` without knowing the director exists. |
-| **RuntimeSet** | `Core/Collections`, `Set_Zombies`, `Set_Vents` | Live lists that objects add themselves to; no `FindObjectsOfType` in the loop. |
-| **Data as ScriptableObjects** | `Data/*.asset` | Weapons, zombie, difficulty and weapon-level curves are assets; the shipped values are defined in code (`ApplyDefaults`, `AssetFactory`) so they are reviewable. |
-| **Pure-C# rules** | `WeaponProgression`, `LevelRules`, `Cooldown` | The rules that define the game are engine-free and unit tested. |
-| **Object pooling** | `Core/Pooling` on top of `UnityEngine.Pool` | Zombies, tracers, flashes, impacts are never instantiated at runtime. |
-| **Tiny service locator** | `Core/Services/GameServices` | For true scene singletons only (player target, pools, audio, director). Interfaces (`IPlayerTarget`) keep Enemies independent of Player. |
-| **Input reader asset** | `Player/Input/InputReader` | The only class that touches the Input System; exposes polled values and C# events; switches action maps. |
-| **Explicit state machines** | `Weapon`, `Zombie`, `GameManager` | Enum + switch. Small enough to read top to bottom. |
-| **Awaitable transitions** | `GameManager` | Scene loads and the death delay are Unity 6 `Awaitable`s under a `CancellationTokenSource` linked to `destroyCancellationToken`; a new transition cancels the old one. No coroutines. |
-| **Procedural presentation** | `WeaponViewModel`, `ZombieAnimator`, `CameraMotion`, `ProceduralSoundBank` | No clips, no imports: sway/bob/recoil/flinch and every sound are computed. The view-model also animates gun parts by name — magazine drops and reseats on reload, slide/bolt cycles per shot and locks back on empty — and ejects pooled brass. |
-| **Gunfire VFX from sprites** | `TextureFactory.MuzzleFlashSprite/SmokeSprite/SparkSprite`, `PrefabFactory.CreateMuzzleFlash/CreateMuzzleSmoke` | The flash is three additive sprite planes (two crossed along the bore, one facing forward) with a random roll and size per shot and a light that spikes and dies; a separate pooled world-space burst leaves smoke drifting and sparks streaking after the gun has moved on. The tracer is an additive line with a white-hot core. `SceneRendersTests.ShotDrawsWithoutErrors` fires and captures the frames to `Logs/render-shot-*.png`. |
-| **Gun handling in numbers** | `Weapons/Runtime/Ballistics.cs`, `WeaponDefinition` "handling" | Chambered round (+1 on a tactical reload), slower empty reload that ends with a rack, recoil that climbs over sustained fire, damage falloff by distance, per-weapon flash size. Pure arithmetic is unit tested. |
-| **Camera stacking** | `PrefabFactory.CreatePlayer` | URP overlay camera renders the gun so it never clips into walls. |
-| **Generated post-processing** | `SceneBuilder.BuildPostProcessProfile` | One `VolumeProfile` (ACES, bloom off the emissive panels, grading, vignette, grain) built from code; a global `Volume` in each lit scene. |
-| **Generated textures, world-scale UVs** | `Editor/TextureFactory.cs`, `Editor/MeshLibrary.cs` | Drywall, ceiling tile, vinyl, wood, concrete, asphalt, brushed metal and fabric are synthesised (albedo + normal) from tileable noise and written as PNGs at regen; still no hand-made binary art. Building blocks use cube meshes whose UVs are in metres, so a 50 cm floor tile is 50 cm on every block. |
-| **Baked bounce, realtime direct** | `SceneBuilder.EnsureLightingSettings` / `Bake`, `BuildingGenerator.BuildProbes` | Lights are Mixed (Indirect Only): direct light and shadows stay realtime, the CPU lightmapper bakes the bounce into lightmaps and a light-probe grid (two heights per room) at regen (~1.5 min). Per-room box-projected reflection probes render once on load — a headless editor bake writes garbage cubemaps, and `SceneRendersTests` fails on the magenta that produces. SSAO is on in `PC_Renderer` (`ProjectBootstrap.ConfigureAmbientOcclusion`). |
-| **Forward+ lighting, no GPU Resident Drawer** | `Assets/Settings/PC_RPAsset.asset`, `BuildingGenerator` | Room lights cast hard shadows within a 20 m shadow distance. The GPU Resident Drawer is deliberately **off**: with it on, the macOS player drew only the clear colour (its instancing shader variants were stripped from the build; the editor keeps every variant, so it looked fine there). `GeneratedSceneTests` pins this. Geometry stays static-batched. |
-| **A world puzzle that re-rolls per run** | `Gameplay/World/KeyHuntDirector`, `BuildingGenerator.BuildKeyQuest` | The building is baked from a fixed seed, so hiding the key at regen would hide it in the same drawer for ever. The generator places every candidate and the director picks among them in `BeginRun`; the roll only decides what is shown, lit, or holds a key. Built *after* `Generate()` returns, like the door leaves — so the static-flag loops never see it (a batching-static drawer opens in code and never moves) and the NavMesh bake has already run. |
-| **Text without a font asset** | `Editor/GlyphFont.cs` → `TextureFactory.WhiteboardHint` | The lobby whiteboard has to carry words a player can read, and there is no font to import. A 5×7 bitmap font written as rows of `'1'`, so the letterforms are reviewable in the diff, stamped into a 1024×640 albedo (non-square: the board is 1.8 × 1.1 m and Unity's cube gives each face 0..1 UVs). The plate is spun 180° because the cube mirrors its +Z face. |
-| **Interact by looking** | `Core/Interaction/IInteractable`, `Player/Interaction/PlayerInteractor` | A camera raycast, not a trigger volume: the prompt answers "what am I looking at". The door and the car seats implement one Core interface; the HUD prompt travels over `Evt_Prompt`, so UI, Player and the things being used never reference each other. |
-| **One camera, borrowed** | `Vehicles/Runtime/VehicleChaseCamera` | The chase rig re-parents the player's own camera rather than owning a second one: `Camera.main`, the listener, post-processing and `CameraMotion`'s shake all keep working, and the rig's forward is the drive-by crosshair. |
-| **Bodies from profiles** | `Editor/CarBodyLibrary.cs` | A silhouette is a dozen stations of three numbers and two flags, reviewable in a diff, and the loft turns any of them into a hull with wells, glass and an underbody. Adding a body style is adding a station list; the physics numbers for it live in `VehicleDefinition.ApplyDefaults`, keyed by the same enum, and `VehiclePrefabTests` checks the two agree on track, wheelbase and wheel size. |
-| **A car as arithmetic** | `Vehicles/Simulation/*`, `VehicleController`, `VehicleWheel` | WheelColliders were twitchy, opaque and tipped the car over at speed. The replacement is a Rigidbody with four probe wheels: the controller sweeps for the road, and every rule — tyre grip against slip, the friction circle, the spring, the steering lock a speed allows, the gearbox — is a static function on plain structs, unit tested in EditMode. Cornering forces are applied at centre-of-mass height, so a roll from steering is impossible by construction rather than by tuning; the visible lean is cosmetic. |
-| **Damage in code, never by contact** | `VehicleRoadkill`, `Zombie.TryStrike`, `ProjectBootstrap.ConfigureCollisionMatrix` | Zombies are agents with static hitboxes, so cars pass through them (matrix) and hurt them with an overlap query, exactly as a zombie's own swing hurts the player. |
-| **Generated foliage, one shader** | `Assets/_Project/Shaders/Foliage.shader`, `Editor/FoliageTextureFactory.cs`, `Editor/FoliageLibrary.cs` | Every leaf in the game is a card cut from one painted 2048² atlas (monstera, fig, fern, snake plant, pothos, canopy clusters, blossom, conifer, grass, weeds, litter, ivy, boxwood, palm; albedo + normal, drawn from analytic leaf profiles with veins and lobes). `FoliageLibrary` grows plants from those cards — curved leaves on stems, tapered bark trunks, vines, canopies of bent-normal cards — as deterministic mesh variants that static-batch. `Vent/Foliage` is a hand-written URP 17 shader: cutout with coverage-preserving mips, two-sided with the back face relit, normal-mapped, vertex-colour wind (gust lean + leaf flutter, world-space so batching keeps it), leaf translucency from the sun and the window spots gated by light layers and shadows, Forward+ light loop, SSAO/DepthNormals, wind-aware shadow caster. Crowns, shrubs and hedges use `M_FoliageCanopy`, which fades a card out as its quad turns edge-on to the viewer (measured from the quad's own normal, not the bent shading normal) so a metre-wide leaf never rasterises as a bright blade; ground cover and indoor plants keep every card, since flat litter is seen edge-on from standing height and a single big leaf must read from any angle. Canopy cards are placed by their centre so none hangs out past the crown silhouette, and pruning a street crown lifts whole cards rather than snapping loose vertices to the cut line, which used to shear a card and smear its atlas cell across the canopy. Foliage is probe-lit, never lightmapped. Indoors: species-varied pots, corner floor plants, desk plants, pothos trailing off shelves. Outdoors: broadleaf/birch/conifer park trees with leaf litter, crown-lifted street trees along every avenue, box hedges, flowering planters and beds, a real lawn of tufts in the park, ivy on the office and apartment walls, weeds along the barrier and yards. |
-| **District without lightmaps** | `DistrictGenerator`, `BuildingGenerator.BuildExterior` | The sun casts soft shadows now, on a rendering layer the interiors are not on, with `customShadowLayers` so ceilings still block it. The district is static for batching but not for GI, so the bake stays around a minute; outdoor light probes and one big reflection probe cover the movers. |
-| **UI Toolkit + runtime data binding** | `UI/*.uxml`, `UI/Screens`, `HudViewModel` | Screens are documents + a controller bound to channels; visibility follows `GameState`. The HUD binds declaratively (`<Bindings>` in `Hud.uxml`) to a plain `HudViewModel`; the controller only writes the model. |
+| ScriptableObject event channels | `Core/Events` | Producers and consumers never reference each other. |
+| Data as ScriptableObjects, defaults in code | `Data/*.asset`, `*.ApplyDefaults()` | Tunable in the inspector, reviewable in a diff, regenerated from code. |
+| Pure-C# rules | `LevelRules`, `WeaponProgression`, `Ballistics`, `FrontDoorState`, `KeyHuntState`, `Vehicles/Simulation` | The rules that define the game are engine-free and unit tested. |
+| Tiny service locator | `Core/Services/GameServices` | Scene singletons only; interfaces (`IPlayerTarget`, `IVehicleOccupant`) keep assemblies apart. |
+| One input reader | `Player/Input/InputReader` | The only class that sees the Input System. |
+| Explicit state machines | `Weapon`, `Zombie`, `GameManager` | Enum + switch, short enough to read top to bottom. |
+| Awaitable transitions | `GameManager` | Unity 6 `Awaitable` under a linked cancellation token; no coroutines. |
+| Interact by looking | `IInteractable`, `PlayerInteractor` | A camera raycast; the prompt answers "what am I looking at". |
+| Damage in code, never by contact | `VehicleRoadkill`, `Zombie.TryStrike` | Zombies are NavMeshAgents nothing can push: cars pass through them and hurt them with an overlap query. |
+| A car as arithmetic | `Vehicles/Simulation`, `VehicleController`, `VehicleWheel` | Tyre, suspension, steering and drivetrain are static functions on plain structs. Tyre forces act at centre-of-mass height, so a roll from steering is impossible by construction; the visible lean is cosmetic. |
+| Bodies from profiles | `Editor/CarBodyLibrary.cs` | A silhouette is a dozen stations of three numbers and two flags; the loft makes a hull with wheel wells, glass and an underbody. A body style is a station list. |
+| One camera, borrowed | `VehicleChaseCamera` | The chase rig re-parents the player's camera, so post-processing, the listener and the shake keep working. |
+| Procedural presentation | `WeaponViewModel`, `ZombieAnimator`, `CameraMotion`, `ProceduralSoundBank` | No clips, no imports: animation and every sound are computed. |
+| Generated textures and foliage | `TextureFactory`, `FoliageTextureFactory`, `FoliageLibrary`, `Shaders/Foliage.shader` | Surfaces from tileable noise with world-scale UVs; every leaf is a card from one painted atlas on a hand-written URP shader with wind and translucency. |
+| Baked bounce, realtime direct | `SceneBuilder.Bake`, `BuildingGenerator.BuildProbes` | Mixed lights: shadows stay live, the lightmapper bakes the bounce and probes at regen. GPU Resident Drawer is off on purpose (`GeneratedSceneTests` pins it). |
+| UI Toolkit with data binding | `UI/*.uxml`, `HudViewModel` | The HUD binds to a plain view model; controllers only write the model. |
 
-### Reading order
+Reading order: `Core/Events` → `DifficultyProfile` → `GameManager`/`LevelDirector` →
+`PlayerCharacter` → `Weapon` → `Zombie`/`ZombieSpawner` → `FrontDoorState`/`KeyHuntDirector` →
+`VehicleController`/`VehicleDriver` → `HudScreen` → `Editor/Bootstrap` and the generators.
 
-1. `Core/Events/EventChannel.cs` → `GameplayEventChannels.cs`
-2. `Core/Data/DifficultyProfile.cs` (the whole progression model)
-3. `Gameplay/Flow/GameManager.cs` → `Gameplay/Levels/LevelDirector.cs` / `LevelRules.cs`
-4. `Player/PlayerCharacter.cs` → `Movement/FirstPersonController.cs` → `Movement/PlayerLook.cs`
-5. `Weapons/Runtime/Weapon.cs` → `WeaponInventory.cs` → `Progression/WeaponProgression.cs`
-6. `Enemies/Runtime/Zombie.cs` → `Spawning/ZombieSpawner.cs` → `Spawning/AirVent.cs`
-7. `Core/Perks/PerkDropTable.cs` → `Gameplay/Perks/PerkSystem.cs` → `Core/Perks/PerkPickup.cs`
-8. `Gameplay/World/FrontDoorState.cs` → `FrontDoor.cs` → `KeyHuntState.cs` → `KeyHuntDirector.cs` → `Player/Interaction/PlayerInteractor.cs`
-9. `Vehicles/Runtime/VehicleController.cs` → `VehicleRoadkill.cs` → `Gameplay/Vehicles/VehicleDriver.cs` → `VehicleChaseCamera.cs`
-10. `UI/Screens/HudScreen.cs`
-11. `Editor/Bootstrap.cs` → `BuildingGenerator.cs` → `DistrictGenerator.cs` → `PrefabFactory.cs` → `SceneBuilder.cs`
+## Generation
+
+`Vent ▸ Rebuild Everything` (`Editor/Bootstrap.cs`) runs project settings → data and materials
+(`AssetFactory`) → prefabs (`PrefabFactory`) → scenes (`SceneBuilder`, `BuildingGenerator`,
+`DistrictGenerator`, `VehiclePlacer`), then bakes lighting and the NavMesh. It is idempotent: assets
+keep their GUIDs, so references never break — edit the defaults in code, regenerate, commit.
+**Vent ▸ Rebuild Assets and Prefabs** does the first half in under a minute for iterating on a prefab.
+
+Look before you ship. **Vent ▸ Snapshot Player View / Rooms / District / Cars / Nature / Key Hunt**
+render to `Logs/snapshot-*.png`; `make test-gui` runs the GPU render tests, which capture frames of
+gunfire and driving to `Logs/render-*.png` and fail on shader errors. Headless renders skip the GPU,
+so a build that only passed headless has not been seen.
+
+If a build feels slow, read the numbers first: the player logs `[FrameRateLog]` lines (scene,
+resolution, fps, worst frame) to `~/Library/Logs/Vent Studio/Vent/Player.log`, and `make gpubench`
+times a fixed workload on each GPU — a laptop on a small charger with a flat battery caps its
+discrete GPU to a few percent, and no build runs well on that.
 
 ## Tuning
 
-* Difficulty: `Assets/_Project/Data/DifficultyProfile.asset` (curves over level). Defaults in
-  `DifficultyProfile.ApplyDefaults()`. Includes the aggression curve and the grace periods: `runStartGrace` (seconds before
-  the first zombie) and `levelStartGrace` (seconds of breather after each level-up).
-* Guns: `Data/Weapon_SMG.asset`, `Data/Weapon_Pistol.asset`; level scaling in
-  `Data/WeaponLevels_Standard.asset` (`WeaponLevelCurve.ApplyDefaults()`).
-* Perks: `Data/PerkDrops.asset` — drop chance, per-kind weights and durations, orb lifetime and floor cap
-  (`PerkDropTable.ApplyDefaults()`). Colours and names in `Core/Perks/PerkStyle.cs`.
-* Cars: `Data/Vehicle_Sedan.asset`, `Data/Vehicle_Van.asset` (`VehicleDefinition.ApplyDefaults(shape)`):
-  mass, torques, top speed, steering, suspension and friction, the occupant damage factor, roadkill speeds
-  and damage, engine pitch, self-righting. The district itself is `DistrictLayout` in `Editor/DistrictGenerator.cs`
-  (seed, lot sizes, street and sidewalk widths, lamp spacing and lit radius, bay size). The unlock level is
-  `FrontDoor.unlockLevel` (4). **Vent ▸ Snapshot District** photographs the street, the hero car, an avenue and an aerial.
-* Zombie: `Data/Zombie.asset` — base stats, melee timing, hit reactions (stagger threshold and
-  length, limb damage multiplier), and the "annoyed" ends of the aggression ranges (notice/hearing
-  radii, slower strikes, wander speed); the enraged ends are the base values.
-* Zombie body: `PrefabFactory.CreateZombie` builds a jointed rig (hips → spine → neck → head/jaw,
-  shoulder → elbow, hip → knee) with hitboxes per zone (head 2.5×, torso 1×, limbs 0.65×) and a
-  world-space health bar; `ZombieAnimator` drives the pivots (shuffle, reach, lunge, stagger,
-  topple-and-sink death) and randomises height, tint, stride and arm pose per spawn.
-* Key hunt: `KeyHuntDirector` on the Building scene's `KeyHunt` root — how many cables (3), how far
-  apart they must be, how far the key desk must be from the spawn, and `seedOverride` (0 ships:
-  roll fresh every run; non-zero pins it, which is what `KeyHuntTests` uses). Prompt and banner text
-  are on the components; the whiteboard's wording is in `TextureFactory.WhiteboardHint`.
-* Building: `BuildingLayout` in `Editor/BuildingGenerator.cs` (grid size, room size, seed, door density).
-  Each room is given a purpose (`RoomType`: office, conference, break room, lobby at the spawn,
-  storage, server room) by `PlanRoomTypes`, which rolls each room and then repairs the plan up to the
-  minimums in `Quotas` — a raw roll leaves one seed in six with no server room (so no key hunt at all)
-  and plenty with no conference or break room. Rooms are furnished from `Editor/PropLibrary.cs` — desks, chairs, cabinets,
-  shelves, vending machines, racks and the rest, all primitives with colliders on the Environment
-  layer, so they are cover, they carve the NavMesh, and they never sit on a door or a vent landing.
-  **Vent ▸ Snapshot Rooms** photographs every room to `Logs/`.
-  Outer walls carry windows (glass panes keep the building sealed and are shootable). Rooms are lit
-  by their ceiling panel plus a warm dusk spot light outside each window — the only light that comes
-  "through" a window, so nothing leaks through walls — and a sun on its own rendering layer lights
-  only the exterior (ground, distant buildings, procedural dusk sky).
-
-Re-running **Vent ▸ Rebuild Everything** rewrites assets in place (GUIDs are preserved), so
-references never break. Edit the defaults in code, regenerate, commit.
+| What | Where |
+|---|---|
+| Difficulty curves, aggression, grace periods | `DifficultyProfile.ApplyDefaults()` → `Data/DifficultyProfile.asset` |
+| Guns and their level scaling | `Data/Weapon_*.asset`, `WeaponLevelCurve.ApplyDefaults()` |
+| Perk chances, durations, orb lifetime | `PerkDropTable.ApplyDefaults()`, colours in `PerkStyle` |
+| Zombie stats, hit reactions, body | `Data/Zombie.asset`, `PrefabFactory.CreateZombie`, `ZombieAnimator` |
+| Cars: mass, grip, gearbox, steering, assists, roadkill | `VehicleDefinition.ApplyDefaults(shape)` → `Data/Vehicle_*.asset` — `maxLateralG` is how tight it corners, `yawAssist` how eagerly the nose follows |
+| Car bodies | station lists in `CarBodyLibrary.For(shape)`; fleet mix in `VehiclePlacer` |
+| Building: grid, rooms, seed, furniture | `BuildingLayout`, `PlanRoomTypes`, `PropLibrary` in `Editor/BuildingGenerator.cs` |
+| District: seed, lots, streets, bays | `DistrictLayout` in `Editor/DistrictGenerator.cs` |
+| Key hunt: cable count, distances, seed | `KeyHuntDirector` on the scene's `KeyHunt` root |
+| Front door unlock level | `FrontDoor.unlockLevel` (4) |
 
 ## Tests
 
-* EditMode (`Assets/Tests/EditMode`): progression, level rules, difficulty monotonicity, event
-  channels, pooling, audio synthesis, save file, the front door rule, the key hunt rule
-  (`KeyHuntStateTests`), the room-type quotas over five thousand seeds (`RoomPlanTests`), the layer
-  table and collision matrix (incl. Vehicle), the district's surfaces/names/spots/barrier/headroom,
-  and the car prefabs and numbers. `GeneratedSceneTests` also pins that nothing in the key hunt is
-  batching-static — a static drawer opens in code and never budges on screen.
-* PlayMode (`Assets/Tests/PlayMode`): loads the generated Building scene and checks vents are on the
-  NavMesh, the lobby is sealed behind the closed front door, a zombie emerges/chases/dies with kill credit,
-  firing consumes ammo and kills level the weapon, and N kills advance the level and refill ammo.
-  `FrontDoorTests` unlock at level 4, open with Interact, path zombies through, walk out and stay
-  contained, wake the outdoor vents and lift the fog; `KeyHuntTests` walk the whole key chain at
-  level 1 without a kill, check that the key moves between runs, that drawers are empty before the
-  power is back and on every desk but one, and that looking at a desktop offers nothing (the drawer
-  is the interactable, not the desk); `VehicleTests` drive, get in and out, drive-by
-  with the pistol only, run a zombie over with vehicle credit, self-right, exit on death, freeze on pause.
+- **EditMode** (`Assets/Tests/EditMode`, 132): every pure rule (progression, levels, difficulty,
+  ballistics, front door, key hunt, tyre/suspension/steering/drivetrain models), the room-type quotas
+  over five thousand seeds, layers and the collision matrix, the generated prefabs and scenes, and
+  that every `MonoBehaviour` lives in a file named after it.
+- **PlayMode** (`Assets/Tests/PlayMode`, 53): the generated building end to end — spawning, chasing,
+  killing with credit, levelling, the door, the whole key chain, getting in and out of cars, drive-by,
+  roadkill — plus `VehicleHandlingTests`, which drives the sedan on a proving ground: top speed
+  through the gears, braking, full lock at top speed on all four wheels, handbrake slide, a kerb at
+  speed, reverse, straight hands-off. Five tests need a GPU or real input and run under `make test-gui`.
 
-## Conventions worth knowing
-
-* **One `MonoBehaviour`/`ScriptableObject` per file, named after the class.** Unity resolves an
-  asset's script by file name; a class that shares a file loads as "missing script". The EditMode
-  test `ScriptFileNamingTests` fails the build if this is violated.
-* The `tools/*.sh` scripts are bash; run them directly (`./tools/test.sh`) rather than sourcing
-  them from zsh.
-* Regeneration is idempotent: existing assets keep their GUIDs, prefabs and scenes are rewritten.
-
-## Verification status
-
-Last verified on Unity 6000.3.22f1 (macOS, Intel): headless regeneration succeeds, EditMode
-35/35 and PlayMode 6/6 pass, and `tools/build.sh` produces `Builds/Vent.app`.
+Last verified on 6000.3.22f1 (macOS): regen, EditMode 132/132, PlayMode 48/48 + 5 GPU-only, GUI
+render tests 3/3, `tools/build.sh` → `Builds/Vent.app`.
 
 ## Layout
 
 ```
-Assets/_Project/Scripts/{Core,Player,Weapons,Enemies,Gameplay,UI,Editor}   source, one asmdef each
-Assets/_Project/{Data,Prefabs,Materials,Textures,Meshes,Scenes,UI}         generated (UXML/USS are hand-written; Scenes/<name>/ holds the baked lightmaps)
+Assets/_Project/Scripts/{Core,Player,Weapons,Enemies,Vehicles,Gameplay,UI,Editor}   one asmdef each
+Assets/_Project/{Data,Prefabs,Materials,Textures,Meshes,Scenes,UI}                  generated (UXML/USS hand-written)
+Assets/_Project/Shaders                                                             the foliage shader
 Assets/Tests/{EditMode,PlayMode}
-Assets/Settings                                                            URP assets from the Unity template
-tools/                                                                     headless regen / test / build scripts
+Assets/Settings                                                                     URP assets
+tools/                                                                              regen / test / build / gpubench
 ```
