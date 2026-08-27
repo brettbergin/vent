@@ -25,6 +25,76 @@ namespace Vent.Editor
         [MenuItem("Vent/Snapshot Pistol")]
         public static void SnapshotPistol() => Snapshot($"{Paths.Prefabs}/VM_Pistol.prefab", new Vector3(0.3f, 0.15f, -0.25f), new Vector3(0f, 0f, 0.02f), 0.6f);
 
+        /// <summary>Every car prefab from a three-quarter front and a three-quarter rear, on a neutral floor: Logs/snapshot-Car_*.png.</summary>
+        [MenuItem("Vent/Snapshot Cars")]
+        public static void SnapshotCars()
+        {
+            Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.42f, 0.44f, 0.5f);
+            var key = new GameObject("Key").AddComponent<Light>();
+            key.type = LightType.Directional;
+            key.intensity = 1.8f;
+            key.color = new Color(1f, 0.95f, 0.85f);
+            key.shadows = LightShadows.Soft;
+            key.transform.rotation = Quaternion.Euler(45f, -40f, 0f);
+            var rim = new GameObject("Rim").AddComponent<Light>();
+            rim.type = LightType.Directional;
+            rim.intensity = 0.6f;
+            rim.color = new Color(0.6f, 0.7f, 1f);
+            rim.transform.rotation = Quaternion.Euler(20f, 150f, 0f);
+            GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            floor.transform.localScale = new Vector3(4f, 1f, 4f);
+            floor.GetComponent<Renderer>().sharedMaterial = AssetDatabase.LoadAssetAtPath<Material>($"{Paths.Materials}/M_Asphalt.mat");
+
+            var camGo = new GameObject("SnapshotCamera");
+            var cam = camGo.AddComponent<Camera>();
+            cam.fieldOfView = 32f;
+            cam.GetUniversalAdditionalCameraData().renderPostProcessing = false;
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = new Color(0.55f, 0.6f, 0.68f);
+            Directory.CreateDirectory("Logs");
+            const int w = 1100, h = 700;
+            var rt = new RenderTexture(w, h, 24);
+            var tex = new Texture2D(w, h, TextureFormat.RGB24, false);
+            foreach (Vent.Vehicles.Data.VehicleShape shape in System.Enum.GetValues(typeof(Vent.Vehicles.Data.VehicleShape)))
+            {
+                string name = CarBodyLibrary.For(shape).Name;
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{Paths.Prefabs}/Vehicle_{name}.prefab");
+                if (prefab == null)
+                {
+                    Debug.LogError($"[Vent] No prefab for {name}; run Vent/Rebuild Assets and Prefabs.");
+                    continue;
+                }
+
+                var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+                foreach (Behaviour behaviour in instance.GetComponentsInChildren<Behaviour>(true))
+                {
+                    behaviour.enabled = false;
+                }
+
+                foreach ((string view, Vector3 from) in new[] { ("front", new Vector3(5.5f, 2.4f, 7.0f)), ("rear", new Vector3(-6.0f, 2.2f, -6.5f)) })
+                {
+                    cam.transform.position = from;
+                    cam.transform.LookAt(new Vector3(0f, 0.7f, 0f));
+                    cam.targetTexture = rt;
+                    cam.Render();
+                    RenderTexture.active = rt;
+                    tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+                    tex.Apply();
+                    RenderTexture.active = null;
+                    cam.targetTexture = null;
+                    File.WriteAllBytes(Path.Combine("Logs", $"snapshot-Car_{name}_{view}.png"), tex.EncodeToPNG());
+                }
+
+                Object.DestroyImmediate(instance);
+            }
+
+            Object.DestroyImmediate(tex);
+            Object.DestroyImmediate(rt);
+            Debug.Log("[Vent] Car snapshots written to Logs/snapshot-Car_*.png");
+        }
+
         /// <summary>Photograph every furnished room of the generated Building scene from a high corner.</summary>
         /// <summary>What the player sees on frame one: from the spawn point, at eye height, facing the spawn yaw, plus a look to each side.</summary>
         [MenuItem("Vent/Snapshot Player View")]

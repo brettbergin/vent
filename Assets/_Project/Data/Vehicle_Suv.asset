@@ -1,0 +1,89 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8ddf1442c3ff740af8662d33617d404d, type: 3}
+  m_Name: Vehicle_Suv
+  m_EditorClassIdentifier: Vent.Vehicles::Vent.Vehicles.Data.VehicleDefinition
+  displayName: SUV
+  shape: 3
+  mass: 1900
+  centreOfMass: {x: 0, y: 0.36, z: 0}
+  wheelbase: 2.9
+  track: 1.68
+  wheelRadius: 0.38
+  suspensionTravel: 0.27
+  suspensionSpring: 56000
+  suspensionDamper: 5800
+  antiRollStiffness: 30000
+  bumpStopSpring: 240000
+  gripMu: 1.9
+  rearGripScale: 1
+  peakSlipDegrees: 8
+  slideSlipDegrees: 25
+  slideGrip: 0.75
+  handbrakeGripScale: 0.55
+  rollingResistance: 0.015
+  tyreForceHeight: 1
+  idleRpm: 900
+  redlineRpm: 5800
+  peakTorque: 150
+  gearRatios:
+  - 3.4
+  - 2
+  - 1.35
+  - 1
+  finalDrive: 8
+  reverseRatioScale: 1
+  transmissionEfficiency: 0.85
+  shiftUpRpm: 5400
+  shiftDownRpm: 2600
+  shiftSeconds: 0.18
+  clutchSpeed: 3
+  rpmResponse: 9
+  topSpeed: 24
+  reverseTopSpeed: 8
+  limiterBand: 0.08
+  brakeForce: 18639
+  brakeBias: 0.62
+  absGrip: 0.9
+  handbrakeForce: 12350
+  engineBrakePerMps: 170
+  drag: 0.6
+  downforcePerMps: 40
+  maxSteerDegrees: 34
+  minSteerDegrees: 5
+  maxLateralG: 1.7
+  steerRateIn: 140
+  steerRateReturn: 320
+  steerInputSharpness: 12
+  yawAssist: 4
+  yawAssistMaxAccel: 4.5
+  uprightGain: 12
+  uprightDamping: 2.5
+  skidSlipStart: 2.5
+  skidSlipFull: 6
+  bodyRollPerG: 4
+  bodyPitchPerG: 2.5
+  occupantDamageFactor: 0.35
+  roadkillMinSpeed: 4
+  roadkillLethalSpeed: 9
+  roadkillMinDamage: 20
+  roadkillMaxDamage: 80
+  roadkillLethalDamage: 10000
+  roadkillSpeedLoss: 0.07
+  rehitSeconds: 0.5
+  engineMinPitch: 0.7
+  engineMaxPitch: 2
+  engineMinVolume: 0.2
+  engineMaxVolume: 0.55
+  selfRightAfterSeconds: 2
+  settleSeconds: 1.5
+  killFloorY: -8

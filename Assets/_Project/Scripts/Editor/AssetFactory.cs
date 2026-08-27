@@ -71,8 +71,11 @@ namespace Vent.Editor
             a.Zombie = GetOrCreate<ZombieDefinition>($"{Paths.Data}/Zombie.asset");
             a.WeaponLevels = GetOrCreate<WeaponLevelCurve>($"{Paths.Data}/WeaponLevels_Standard.asset", c => c.ApplyDefaults(25));
             a.PerkDrops = GetOrCreate<PerkDropTable>($"{Paths.Data}/PerkDrops.asset", t => t.ApplyDefaults());
-            a.Sedan = GetOrCreate<VehicleDefinition>($"{Paths.Data}/Vehicle_Sedan.asset", v => v.ApplyDefaults(VehicleShape.Sedan));
-            a.Van = GetOrCreate<VehicleDefinition>($"{Paths.Data}/Vehicle_Van.asset", v => v.ApplyDefaults(VehicleShape.Van));
+            foreach (VehicleShape shape in Enum.GetValues(typeof(VehicleShape)))
+            {
+                VehicleShape captured = shape;
+                a.SetVehicle(shape, GetOrCreate<VehicleDefinition>($"{Paths.Data}/Vehicle_{shape}.asset", v => v.ApplyDefaults(captured)));
+            }
 
             a.Smg = GetOrCreate<WeaponDefinition>($"{Paths.Data}/Weapon_SMG.asset", w => w.Configure(
                 "SMG", WeaponSlot.Primary, FireMode.Automatic,
@@ -207,17 +210,21 @@ namespace Vent.Editor
             // Cars: a handful of paints, glass, rubber, chrome, and the lamps.
             a.CarPaints = new[]
             {
-                Lit("M_CarPaint_Red", new Color(0.62f, 0.08f, 0.08f), smoothness: 0.7f, metallic: 0.55f),
-                Lit("M_CarPaint_Blue", new Color(0.10f, 0.18f, 0.45f), smoothness: 0.7f, metallic: 0.55f),
-                Lit("M_CarPaint_White", new Color(0.85f, 0.85f, 0.83f), smoothness: 0.7f, metallic: 0.55f),
-                Lit("M_CarPaint_Black", new Color(0.05f, 0.05f, 0.06f), smoothness: 0.75f, metallic: 0.6f),
-                Lit("M_CarPaint_Silver", new Color(0.55f, 0.57f, 0.6f), smoothness: 0.7f, metallic: 0.8f),
-                Lit("M_CarPaint_Green", new Color(0.12f, 0.32f, 0.18f), smoothness: 0.7f, metallic: 0.55f),
+                CarPaint("M_CarPaint_Red", new Color(0.62f, 0.06f, 0.06f)),
+                CarPaint("M_CarPaint_Blue", new Color(0.08f, 0.16f, 0.45f)),
+                CarPaint("M_CarPaint_White", new Color(0.88f, 0.88f, 0.86f)),
+                CarPaint("M_CarPaint_Black", new Color(0.04f, 0.04f, 0.05f)),
+                CarPaint("M_CarPaint_Silver", new Color(0.55f, 0.57f, 0.6f), metallic: 0.85f),
+                CarPaint("M_CarPaint_Green", new Color(0.10f, 0.30f, 0.16f)),
             };
-            a.CarGlass = LitTransparent("M_CarGlass", new Color(0.15f, 0.2f, 0.25f, 0.55f), smoothness: 0.95f);
+            a.CarTrim = Lit("M_CarTrim", new Color(0.06f, 0.06f, 0.065f), smoothness: 0.35f);
+            a.CarUnderbody = Lit("M_CarUnderbody", new Color(0.025f, 0.025f, 0.028f), smoothness: 0.1f);
+            a.Plate = Lit("M_Plate", new Color(0.92f, 0.92f, 0.88f), smoothness: 0.4f);
+            a.CarGlass = LitTransparent("M_CarGlass", new Color(0.08f, 0.12f, 0.16f, 0.62f), smoothness: 0.97f);
             a.Tyre = Lit("M_Tyre", new Color(0.04f, 0.04f, 0.045f), smoothness: 0.3f);
             a.Chrome = Lit("M_Chrome", new Color(0.8f, 0.8f, 0.82f), smoothness: 0.85f, metallic: 0.95f);
             a.CarInterior = Lit("M_CarInterior", new Color(0.12f, 0.12f, 0.13f), smoothness: 0.2f);
+            a.CarBodyPhysics = PhysicsMaterialAsset("PM_CarBody", friction: 0.25f, bounce: 0f);
             a.Headlight = Lit("M_Headlight", new Color(0.9f, 0.9f, 0.85f), smoothness: 0.8f, metallic: 0.2f, emission: new Color(1f, 0.95f, 0.8f) * 2.5f);
             a.Taillight = Lit("M_Taillight", new Color(0.6f, 0.05f, 0.05f), smoothness: 0.8f, metallic: 0.1f, emission: new Color(1f, 0.1f, 0.05f) * 2.5f);
             a.Skin = Lit("M_Skin", new Color(0.8f, 0.62f, 0.5f), smoothness: 0.35f);
@@ -297,6 +304,27 @@ namespace Vent.Editor
                 p.match = 0.5f;
                 p.sortingOrder = 0;
             });
+        }
+
+        /// <summary>A physics material asset, created once and re-tuned on every regen.</summary>
+        private static PhysicsMaterial PhysicsMaterialAsset(string name, float friction, float bounce)
+        {
+            string path = $"{Paths.Materials}/{name}.physicMaterial";
+            var m = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(path);
+            if (m == null)
+            {
+                m = new PhysicsMaterial(name);
+                ProjectBootstrap.EnsureFolder(Paths.Materials);
+                AssetDatabase.CreateAsset(m, path);
+            }
+
+            m.dynamicFriction = friction;
+            m.staticFriction = friction;
+            m.bounciness = bounce;
+            m.frictionCombine = PhysicsMaterialCombine.Minimum;
+            m.bounceCombine = PhysicsMaterialCombine.Minimum;
+            EditorUtility.SetDirty(m);
+            return m;
         }
 
         private static Material Lit(string name, Color baseColor, float smoothness = 0.3f, float metallic = 0f, Color? emission = null, TextureFactory.TextureSet tex = null)
@@ -395,6 +423,20 @@ namespace Vent.Editor
             m.DisableKeyword("_NORMALMAP");
             m.DisableKeyword("_EMISSION");
             m.SetColor("_EmissionColor", Color.black);
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
+        /// <summary>Car paint: a metallic base under a clear coat (URP Complex Lit), so the body carries a sharp sky reflection over a coloured sheen.</summary>
+        private static Material CarPaint(string name, Color color, float metallic = 0.35f)
+        {
+            Material m = GetOrCreateMaterial(name, "Universal Render Pipeline/Complex Lit");
+            m.SetColor("_BaseColor", color);
+            m.SetFloat("_Smoothness", 0.62f);
+            m.SetFloat("_Metallic", metallic);
+            m.SetFloat("_ClearCoatMask", 1f);
+            m.SetFloat("_ClearCoatSmoothness", 0.95f);
+            m.EnableKeyword("_CLEARCOAT");
             EditorUtility.SetDirty(m);
             return m;
         }

@@ -15,25 +15,63 @@ MonoBehaviour:
   displayName: Sedan
   shape: 0
   mass: 1350
-  centreOfMass: {x: 0, y: 0.35, z: 0}
-  motorTorque: 1800
-  reverseTorqueScale: 0.5
-  brakeTorque: 3500
-  handbrakeTorque: 6000
-  idleBrakeTorque: 250
+  centreOfMass: {x: 0, y: 0.3, z: 0}
+  wheelbase: 2.8
+  track: 1.6
+  wheelRadius: 0.34
+  suspensionTravel: 0.24
+  suspensionSpring: 42000
+  suspensionDamper: 4200
+  antiRollStiffness: 25000
+  bumpStopSpring: 160000
+  gripMu: 2.2
+  rearGripScale: 1
+  peakSlipDegrees: 8
+  slideSlipDegrees: 25
+  slideGrip: 0.75
+  handbrakeGripScale: 0.55
+  rollingResistance: 0.015
+  tyreForceHeight: 1
+  idleRpm: 900
+  redlineRpm: 6500
+  peakTorque: 120
+  gearRatios:
+  - 3.4
+  - 2
+  - 1.35
+  - 1
+  finalDrive: 8
+  reverseRatioScale: 1
+  transmissionEfficiency: 0.85
+  shiftUpRpm: 6100
+  shiftDownRpm: 2600
+  shiftSeconds: 0.18
+  clutchSpeed: 3
+  rpmResponse: 9
   topSpeed: 26
   reverseTopSpeed: 8
-  downforcePerMps: 40
-  maxSteerDegrees: 32
-  highSpeedSteerScale: 0.35
-  steerSharpness: 8
-  wheelRadius: 0.34
-  suspensionDistance: 0.18
-  suspensionSpring: 38000
-  suspensionDamper: 4500
-  forwardStiffness: 1.6
-  sidewaysStiffness: 2
-  handbrakeSidewaysStiffness: 0.7
+  limiterBand: 0.08
+  brakeForce: 13243.501
+  brakeBias: 0.62
+  absGrip: 0.9
+  handbrakeForce: 8775
+  engineBrakePerMps: 140
+  drag: 0.45
+  downforcePerMps: 30
+  maxSteerDegrees: 34
+  minSteerDegrees: 5
+  maxLateralG: 2
+  steerRateIn: 140
+  steerRateReturn: 320
+  steerInputSharpness: 12
+  yawAssist: 4
+  yawAssistMaxAccel: 4.5
+  uprightGain: 12
+  uprightDamping: 2.5
+  skidSlipStart: 2.5
+  skidSlipFull: 6
+  bodyRollPerG: 3
+  bodyPitchPerG: 2
   occupantDamageFactor: 0.35
   roadkillMinSpeed: 4
   roadkillLethalSpeed: 9

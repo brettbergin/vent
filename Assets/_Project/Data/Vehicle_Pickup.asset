@@ -1,0 +1,89 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8ddf1442c3ff740af8662d33617d404d, type: 3}
+  m_Name: Vehicle_Pickup
+  m_EditorClassIdentifier: Vent.Vehicles::Vent.Vehicles.Data.VehicleDefinition
+  displayName: Pickup
+  shape: 4
+  mass: 2200
+  centreOfMass: {x: 0, y: 0.38, z: 0}
+  wheelbase: 3.3
+  track: 1.7
+  wheelRadius: 0.38
+  suspensionTravel: 0.27
+  suspensionSpring: 62000
+  suspensionDamper: 6500
+  antiRollStiffness: 35000
+  bumpStopSpring: 240000
+  gripMu: 1.8
+  rearGripScale: 1
+  peakSlipDegrees: 8
+  slideSlipDegrees: 25
+  slideGrip: 0.75
+  handbrakeGripScale: 0.55
+  rollingResistance: 0.015
+  tyreForceHeight: 1
+  idleRpm: 800
+  redlineRpm: 5200
+  peakTorque: 165
+  gearRatios:
+  - 3.2
+  - 1.9
+  - 1.3
+  - 1
+  finalDrive: 7.5
+  reverseRatioScale: 1
+  transmissionEfficiency: 0.85
+  shiftUpRpm: 4800
+  shiftDownRpm: 2300
+  shiftSeconds: 0.22
+  clutchSpeed: 3
+  rpmResponse: 7
+  topSpeed: 23
+  reverseTopSpeed: 7
+  limiterBand: 0.08
+  brakeForce: 21582
+  brakeBias: 0.62
+  absGrip: 0.9
+  handbrakeForce: 14300
+  engineBrakePerMps: 200
+  drag: 0.7
+  downforcePerMps: 40
+  maxSteerDegrees: 30
+  minSteerDegrees: 5
+  maxLateralG: 1.6
+  steerRateIn: 110
+  steerRateReturn: 260
+  steerInputSharpness: 12
+  yawAssist: 3.5
+  yawAssistMaxAccel: 3.5
+  uprightGain: 10
+  uprightDamping: 2.5
+  skidSlipStart: 2.5
+  skidSlipFull: 6
+  bodyRollPerG: 4
+  bodyPitchPerG: 2.5
+  occupantDamageFactor: 0.3
+  roadkillMinSpeed: 4
+  roadkillLethalSpeed: 8
+  roadkillMinDamage: 20
+  roadkillMaxDamage: 80
+  roadkillLethalDamage: 10000
+  roadkillSpeedLoss: 0.05
+  rehitSeconds: 0.5
+  engineMinPitch: 0.6
+  engineMaxPitch: 1.7
+  engineMinVolume: 0.25
+  engineMaxVolume: 0.6
+  selfRightAfterSeconds: 2
+  settleSeconds: 1.5
+  killFloorY: -8

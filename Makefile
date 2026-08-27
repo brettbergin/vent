@@ -9,7 +9,7 @@ APP        := Builds/Vent.app
 PLAYER_LOG := $(HOME)/Library/Logs/Vent Studio/Vent/Player.log
 
 .DEFAULT_GOAL := help
-.PHONY: help regen test test-edit test-play test-gui build build-windows run open logs player-log clean check
+.PHONY: help regen test test-edit test-play test-gui build build-windows run open logs player-log gpubench clean check
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -53,6 +53,9 @@ open: ## Open the project in the Unity editor
 
 logs: ## Tail the most recent regen/test/build log
 	@ls -t Logs/*.log 2>/dev/null | head -1 | xargs -I{} sh -c 'echo "== {}"; tail -n 40 "{}"'
+
+gpubench: ## Time a fixed GPU workload on every Metal device: tells a throttled machine from a slow build
+	@swiftc -O -o "$(CURDIR)/Logs/gpubench" tools/gpubench.swift && "$(CURDIR)/Logs/gpubench"
 
 player-log: ## Show errors/exceptions from the last player session
 	@test -f "$(PLAYER_LOG)" || { echo "No player log at $(PLAYER_LOG)" >&2; exit 1; }

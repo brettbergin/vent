@@ -5,20 +5,28 @@ using Vent.Core.Services;
 namespace Vent.Vehicles.Runtime
 {
     /// <summary>
-    /// The car's voice: a synthesised engine loop whose pitch and volume follow engine load, a door
-    /// and a starter when the driver gets in, and a crunch on impacts. The loop is the one sound in
-    /// the game that must be seamless, so it lives on its own looping AudioSource rather than the
+    /// The car's voice: a synthesised engine loop whose pitch follows the engine speed (so every
+    /// gear change is heard) and whose volume follows the throttle, a tyre loop that swells as the
+    /// tyres slide, a door and a starter when the driver gets in, and a crunch on impacts. The two
+    /// loops must be seamless, so they live on their own looping AudioSources rather than the
     /// one-shot voice ring.
     /// </summary>
     [RequireComponent(typeof(VehicleController))]
     public sealed class VehicleAudio : MonoBehaviour
     {
         [SerializeField] private AudioSource engine;
+        [SerializeField] private AudioSource tyres;
+        [SerializeField, Range(0f, 1f)] private float skidVolume = 0.5f;
 
         private VehicleController controller;
         private float fade;
+        private float skid;
 
-        public void Configure(AudioSource source) => engine = source;
+        public void Configure(AudioSource engineSource, AudioSource tyreSource)
+        {
+            engine = engineSource;
+            tyres = tyreSource;
+        }
 
         private void Awake()
         {
@@ -27,6 +35,12 @@ namespace Vent.Vehicles.Runtime
             {
                 engine.loop = true;
                 engine.playOnAwake = false;
+            }
+
+            if (tyres != null)
+            {
+                tyres.loop = true;
+                tyres.playOnAwake = false;
             }
         }
 
@@ -46,19 +60,33 @@ namespace Vent.Vehicles.Runtime
         {
             Vector3 at = transform.position + Vector3.up;
             SfxPlayer.TryPlayAt(SoundId.CarDoor, at, 0.9f);
-            if (!occupied || engine == null)
+            if (!occupied)
             {
                 return;
             }
 
             SfxPlayer.TryPlayAt(SoundId.CarStart, at, 0.8f);
-            if (engine.clip == null)
+            if (engine != null)
             {
-                engine.clip = ProceduralSoundBank.Get(SoundId.EngineLoop);
+                if (engine.clip == null)
+                {
+                    engine.clip = ProceduralSoundBank.Get(SoundId.EngineLoop);
+                }
+
+                fade = 0f;
+                engine.Play();
             }
 
-            fade = 0f;
-            engine.Play();
+            if (tyres != null)
+            {
+                if (tyres.clip == null)
+                {
+                    tyres.clip = ProceduralSoundBank.Get(SoundId.TyreSkid);
+                }
+
+                tyres.volume = 0f;
+                tyres.Play();
+            }
         }
 
         private void OnImpact(float speed)
@@ -68,21 +96,38 @@ namespace Vent.Vehicles.Runtime
 
         private void Update()
         {
-            if (engine == null || !engine.isPlaying || controller.Definition == null)
+            if (controller.Definition == null)
             {
                 return;
             }
 
             float dt = Time.deltaTime;
             bool running = controller.IsOccupied;
-            fade = Mathf.MoveTowards(fade, running ? 1f : 0f, dt / 0.4f);
             float master = GameServices.TryGet(out SfxPlayer sfx) ? sfx.Volume : 1f;
-            float rpm = controller.Rpm01;
-            engine.pitch = Mathf.Lerp(controller.Definition.EngineMinPitch, controller.Definition.EngineMaxPitch, rpm);
-            engine.volume = Mathf.Lerp(controller.Definition.EngineMinVolume, controller.Definition.EngineMaxVolume, rpm) * fade * master;
-            if (!running && fade <= 0f)
+            fade = Mathf.MoveTowards(fade, running ? 1f : 0f, dt / 0.4f);
+
+            if (engine != null && engine.isPlaying)
             {
-                engine.Stop();
+                float rpm = controller.Rpm01;
+                float load = Mathf.Max(rpm * 0.6f, controller.Throttle01);
+                engine.pitch = Mathf.Lerp(controller.Definition.EngineMinPitch, controller.Definition.EngineMaxPitch, rpm);
+                engine.volume = Mathf.Lerp(controller.Definition.EngineMinVolume, controller.Definition.EngineMaxVolume, load) * fade * master;
+                if (!running && fade <= 0f)
+                {
+                    engine.Stop();
+                }
+            }
+
+            if (tyres != null && tyres.isPlaying)
+            {
+                float target = running ? controller.SkidIntensity : 0f;
+                skid = Mathf.MoveTowards(skid, target, dt / 0.12f);
+                tyres.volume = skid * skidVolume * master;
+                tyres.pitch = Mathf.Lerp(0.9f, 1.15f, controller.Speed01);
+                if (!running && skid <= 0f)
+                {
+                    tyres.Stop();
+                }
             }
         }
     }

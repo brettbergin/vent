@@ -55,8 +55,7 @@ namespace Vent.Editor
         public InputReader InputReader;
         public ZombieRuntimeSet Zombies;
         public VentRuntimeSet Vents;
-        public VehicleDefinition Sedan;
-        public VehicleDefinition Van;
+        public VehicleDefinition Sedan, Van, Hatchback, Suv, Pickup;
         public PanelSettings PanelSettings;
 
         // Materials
@@ -65,18 +64,62 @@ namespace Vent.Editor
             // District
             Brick, Stucco, MetalPanel, Pavers, Grass, Dirt, DarkGlass, LitWindow, NeonRed, NeonBlue, NeonAmber, PaintWhite, PaintYellow, Fence, LampHead, Awning,
             // Cars
-            CarGlass, Tyre, Chrome, CarInterior, Headlight, Taillight, Skin,
+            CarGlass, Tyre, Chrome, CarInterior, CarTrim, CarUnderbody, Plate, Headlight, Taillight, Skin,
             // Nature: the leaf atlas (outdoor wind and the still indoor version), bark, mulch, glazed pots
             Foliage, FoliageCanopy, FoliageIndoor, Bark, Birch, Mulch, Ceramic, CeramicDark,
             // Key hunt: the cable jacket that has to catch the eye across a room, and the hint board
             CableBlue, WhiteboardHint;
         public Material[] CarPaints;
+        /// <summary>Slippery, dead bodywork: a car slides along a wall instead of catching on it.</summary>
+        public PhysicsMaterial CarBodyPhysics;
 
         // Prefabs
         public GameObject MuzzleFlashPrefab, MuzzleSmokePrefab, TracerPrefab, ImpactPrefab, BloodImpactPrefab;
         public GameObject ShellCasingPrefab;
-        public GameObject SedanPrefab, VanPrefab;
+        public GameObject SedanPrefab, VanPrefab, HatchbackPrefab, SuvPrefab, PickupPrefab;
         public GameObject SmgViewModel, PistolViewModel;
         public GameObject ZombiePrefab, VentPrefab, PlayerPrefab, PerkPickupPrefab;
+
+        public VehicleDefinition Vehicle(VehicleShape shape) => shape switch
+        {
+            VehicleShape.Van => Van,
+            VehicleShape.Hatchback => Hatchback,
+            VehicleShape.Suv => Suv,
+            VehicleShape.Pickup => Pickup,
+            _ => Sedan,
+        };
+
+        public GameObject VehiclePrefab(VehicleShape shape) => shape switch
+        {
+            VehicleShape.Van => VanPrefab,
+            VehicleShape.Hatchback => HatchbackPrefab,
+            VehicleShape.Suv => SuvPrefab,
+            VehicleShape.Pickup => PickupPrefab,
+            _ => SedanPrefab,
+        };
+
+        public void SetVehicle(VehicleShape shape, VehicleDefinition def)
+        {
+            switch (shape)
+            {
+                case VehicleShape.Van: Van = def; break;
+                case VehicleShape.Hatchback: Hatchback = def; break;
+                case VehicleShape.Suv: Suv = def; break;
+                case VehicleShape.Pickup: Pickup = def; break;
+                default: Sedan = def; break;
+            }
+        }
+
+        public void SetVehiclePrefab(VehicleShape shape, GameObject prefab)
+        {
+            switch (shape)
+            {
+                case VehicleShape.Van: VanPrefab = prefab; break;
+                case VehicleShape.Hatchback: HatchbackPrefab = prefab; break;
+                case VehicleShape.Suv: SuvPrefab = prefab; break;
+                case VehicleShape.Pickup: PickupPrefab = prefab; break;
+                default: SedanPrefab = prefab; break;
+            }
+        }
     }
 }

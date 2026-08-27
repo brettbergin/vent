@@ -61,8 +61,10 @@ namespace Vent.Editor
             a.VentPrefab = CreateVent(a);
             a.PlayerPrefab = CreatePlayer(a);
             a.PerkPickupPrefab = CreatePerkPickup(a);
-            a.SedanPrefab = CreateVehicle(a, VehicleShape.Sedan);
-            a.VanPrefab = CreateVehicle(a, VehicleShape.Van);
+            foreach (VehicleShape shape in System.Enum.GetValues(typeof(VehicleShape)))
+            {
+                a.SetVehiclePrefab(shape, CreateVehicle(a, shape));
+            }
         }
 
         // ------------------------------------------------------------------ VFX
@@ -715,110 +717,208 @@ namespace Vent.Editor
         // ------------------------------------------------------------------ vehicles
 
         /// <summary>
-        /// A car from boxes and cylinders: chassis and cabin (the two colliders), glass, lamps, mirrors,
-        /// an interior you can see from the chase camera, four WheelColliders with visual wheels, the
-        /// seat and exit points the driver uses, and the arm-and-pistol prop for drive-by. Root on the
-        /// ground plane, nose along +Z, driver on the left (-X). Parked kinematic; see VehicleController.
+        /// A car. Root on the ground plane, nose along +Z, driver on the left (-X). The hull is a
+        /// lofted mesh from <see cref="CarBodyLibrary"/> (paint, glass and underbody submeshes) dressed
+        /// with bumpers, grille, lamps in bezels, plates, mirrors, handles, wipers and an interior you
+        /// can see through the glass — all under <c>Body</c>, which is purely visual and is what
+        /// VehicleBodyMotion leans. <c>Colliders</c> holds the chassis, the cabin and a guard box
+        /// around each wheel on a slippery physics material, so the car slides along a wall instead
+        /// of catching on it. <c>Wheels</c> holds the four suspension hardpoints, each a VehicleWheel
+        /// with a revolved tyre and a dished, spoked rim hanging below it at the parked ride height;
+        /// there are no WheelColliders — the controller probes for the road itself. Plus the seat and
+        /// exit points the driver uses, the arm-and-pistol prop for drive-by, two headlamp beams, and
+        /// two looping audio sources (engine, tyres). Parked kinematic; see VehicleController.
         /// </summary>
         private static GameObject CreateVehicle(GameAssets a, VehicleShape shape)
         {
-            bool van = shape == VehicleShape.Van;
-            VehicleDefinition def = van ? a.Van : a.Sedan;
-            var root = new GameObject(van ? "Vehicle_Van" : "Vehicle_Sedan");
+            CarBodyLibrary.Spec spec = CarBodyLibrary.For(shape);
+            VehicleDefinition def = a.Vehicle(shape);
+            var root = new GameObject($"Vehicle_{spec.Name}");
             Transform t = root.transform;
 
             var body = root.AddComponent<Rigidbody>();
             body.mass = def.Mass;
             body.centerOfMass = def.CentreOfMass;
-            body.linearDamping = 0.05f;
-            body.angularDamping = 1f;
+            body.linearDamping = 0f; // drag is the definition's, applied by the controller
+            body.angularDamping = 0.5f;
             body.interpolation = RigidbodyInterpolation.Interpolate;
             body.collisionDetectionMode = CollisionDetectionMode.Continuous;
-            body.solverIterations = 8;
-            body.solverVelocityIterations = 2;
-            body.maxAngularVelocity = 8f;
+            body.solverIterations = 12;
+            body.solverVelocityIterations = 4;
+            body.maxAngularVelocity = 6f;
             body.isKinematic = true;
 
-            float length = van ? 5.0f : 4.4f, width = van ? 1.95f : 1.8f;
-            float wheelX = van ? 0.85f : 0.8f, wheelZ = van ? 1.7f : 1.4f, r = def.WheelRadius;
+            float length = spec.Length, width = spec.Width, halfL = spec.HalfLength, halfW = width / 2f;
+            float wheelX = spec.Track / 2f, wheelZ = spec.Wheelbase / 2f, r = spec.WheelRadius;
+            float belt = spec.BeltAtDriver, roof = spec.CabinRoofY, floor = spec.FloorY;
+            float restLength = def.SuspensionTravel - def.RestCompression; // hardpoint to wheel centre, parked
+            float hardpointY = r + restLength;                                // so the parked wheel centre sits at r
             Material paint = a.CarPaints[0];
             var paintRenderers = new List<Renderer>();
 
+            // ---- Body: visual only ---------------------------------------------------------------
             var bodyGo = new GameObject("Body");
             bodyGo.transform.SetParent(t, false);
             Transform b = bodyGo.transform;
-            GameObject Panel(string name, Vector3 pos, Vector3 size, bool collider)
+
+            var hull = new GameObject("Hull");
+            hull.transform.SetParent(b, false);
+            hull.AddComponent<MeshFilter>().sharedMesh = CarBodyLibrary.Body(spec);
+            var hullRenderer = hull.AddComponent<MeshRenderer>();
+            hullRenderer.sharedMaterials = new[] { paint, a.CarGlass, a.CarUnderbody };
+            paintRenderers.Add(hullRenderer);
+
+            GameObject Trim(string name, Vector3 pos, Vector3 size, Material m, PrimitiveType type = PrimitiveType.Cube) => Primitive(type, name, b, pos, size, m, collider: false);
+            GameObject Painted(string name, Vector3 pos, Vector3 size)
             {
-                GameObject go = Primitive(PrimitiveType.Cube, name, b, pos, size, paint, collider);
+                GameObject go = Primitive(PrimitiveType.Cube, name, b, pos, size, paint, collider: false);
                 paintRenderers.Add(go.GetComponent<Renderer>());
                 return go;
             }
 
-            Panel("Chassis", new Vector3(0f, van ? 0.7f : 0.62f, 0f), new Vector3(width, van ? 0.7f : 0.55f, length), collider: true);
-            Panel("Cabin", van ? new Vector3(0f, 1.5f, -0.4f) : new Vector3(0f, 1.18f, -0.15f), van ? new Vector3(1.9f, 0.9f, 3.6f) : new Vector3(1.6f, 0.55f, 2.2f), collider: true);
-            GameObject bonnet = Panel("Bonnet", van ? new Vector3(0f, 1.0f, 2.0f) : new Vector3(0f, 0.95f, 1.55f), van ? new Vector3(1.8f, 0.3f, 0.9f) : new Vector3(1.6f, 0.25f, 1.0f), collider: false);
-            if (!van)
-            {
-                bonnet.transform.localRotation = Quaternion.Euler(-12f, 0f, 0f);
-                Panel("Boot", new Vector3(0f, 0.95f, -1.65f), new Vector3(1.6f, 0.2f, 0.9f), collider: false);
-            }
+            // Bumpers, valances, grille, plates, exhaust.
+            Trim("BumperF", new Vector3(0f, floor + 0.11f, halfL + 0.05f), new Vector3(width - 0.12f, 0.2f, 0.16f), a.CarTrim);
+            Trim("BumperR", new Vector3(0f, floor + 0.11f, -halfL - 0.05f), new Vector3(width - 0.12f, 0.2f, 0.16f), a.CarTrim);
+            Trim("ValanceF", new Vector3(0f, floor + 0.01f, halfL + 0.02f), new Vector3(width - 0.4f, 0.06f, 0.12f), a.CarUnderbody);
+            Trim("ValanceR", new Vector3(0f, floor + 0.01f, -halfL - 0.02f), new Vector3(width - 0.4f, 0.06f, 0.12f), a.CarUnderbody);
+            float grilleY = Mathf.Lerp(floor + 0.22f, spec.NoseY, 0.45f);
+            Trim("Grille", new Vector3(0f, grilleY, halfL + 0.01f), new Vector3(width * 0.42f, 0.16f, 0.03f), a.CarTrim);
+            Trim("GrilleSlatA", new Vector3(0f, grilleY + 0.04f, halfL + 0.02f), new Vector3(width * 0.42f, 0.014f, 0.03f), a.Chrome);
+            Trim("GrilleSlatB", new Vector3(0f, grilleY - 0.04f, halfL + 0.02f), new Vector3(width * 0.42f, 0.014f, 0.03f), a.Chrome);
+            Trim("PlateF", new Vector3(0f, floor + 0.11f, halfL + 0.135f), new Vector3(0.44f, 0.11f, 0.012f), a.Plate);
+            Trim("PlateR", new Vector3(0f, spec.TailY - 0.34f, -halfL - 0.135f), new Vector3(0.44f, 0.11f, 0.012f), a.Plate);
+            Trim("Exhaust", new Vector3(halfW - 0.32f, floor - 0.02f, -halfL - 0.08f), new Vector3(0.07f, 0.1f, 0.07f), a.Chrome, PrimitiveType.Cylinder)
+                .transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
 
-            Primitive(PrimitiveType.Cube, "Windscreen", b, van ? new Vector3(0f, 1.5f, 1.45f) : new Vector3(0f, 1.15f, 0.95f), van ? new Vector3(1.7f, 0.8f, 0.04f) : new Vector3(1.5f, 0.5f, 0.04f), a.CarGlass, false)
-                .transform.localRotation = Quaternion.Euler(van ? 20f : 28f, 0f, 0f);
-            Primitive(PrimitiveType.Cube, "RearWindow", b, van ? new Vector3(0f, 1.5f, -2.2f) : new Vector3(0f, 1.15f, -1.3f), van ? new Vector3(1.7f, 0.7f, 0.04f) : new Vector3(1.5f, 0.45f, 0.04f), a.CarGlass, false)
-                .transform.localRotation = Quaternion.Euler(van ? 0f : -30f, 0f, 0f);
+            // Lamps: headlamps in dark bezels, tail lamps as strips.
+            var headLamps = new List<Renderer>();
+            var tailLamps = new List<Renderer>();
+            float lampX = halfW - 0.36f, headY = spec.NoseY - 0.15f, tailY = spec.TailY - 0.16f;
             foreach (float side in new[] { -1f, 1f })
             {
                 string s = side < 0f ? "L" : "R";
-                Primitive(PrimitiveType.Cube, $"Window{s}", b, van ? new Vector3(side * 0.96f, 1.55f, -0.4f) : new Vector3(side * 0.81f, 1.2f, -0.15f), van ? new Vector3(0.02f, 0.6f, 3.2f) : new Vector3(0.02f, 0.4f, 1.9f), a.CarGlass, false);
-                Primitive(PrimitiveType.Cube, $"Headlight{s}", b, new Vector3(side * 0.6f, 0.7f, length / 2f + 0.01f), new Vector3(0.35f, 0.15f, 0.05f), a.Headlight, false);
-                Primitive(PrimitiveType.Cube, $"Taillight{s}", b, new Vector3(side * 0.6f, 0.7f, -length / 2f - 0.01f), new Vector3(0.35f, 0.15f, 0.05f), a.Taillight, false);
-                Panel($"Mirror{s}", new Vector3(side * (width / 2f + 0.08f), 1.05f, 0.8f), new Vector3(0.15f, 0.1f, 0.08f), collider: false);
-                Primitive(PrimitiveType.Cube, $"ArchF{s}", b, new Vector3(side * (width / 2f + 0.02f), 0.5f, wheelZ), new Vector3(0.1f, 0.5f, 0.95f), a.MetalDark, false);
-                Primitive(PrimitiveType.Cube, $"ArchR{s}", b, new Vector3(side * (width / 2f + 0.02f), 0.5f, -wheelZ), new Vector3(0.1f, 0.5f, 0.95f), a.MetalDark, false);
+                Trim($"HeadBezel{s}", new Vector3(side * lampX, headY, halfL - 0.015f), new Vector3(0.42f, 0.18f, 0.03f), a.CarTrim);
+                headLamps.Add(Trim($"Headlight{s}", new Vector3(side * lampX, headY, halfL + 0.01f), new Vector3(0.36f, 0.13f, 0.12f), a.Headlight, PrimitiveType.Sphere).GetComponent<Renderer>());
+                Trim($"TailBezel{s}", new Vector3(side * lampX, tailY, -halfL + 0.015f), new Vector3(0.46f, 0.16f, 0.03f), a.CarTrim);
+                tailLamps.Add(Trim($"Taillight{s}", new Vector3(side * lampX, tailY, -halfL - 0.012f), new Vector3(0.42f, 0.11f, 0.04f), a.Taillight).GetComponent<Renderer>());
+
+                // Mirrors on the A pillars, handles on the doors, wipers at the base of the screen.
+                // The greenhouse is inset from the belt, so the stalk starts inside the door skin and reaches out past it.
+                float mirrorZ = spec.CabinZ1 - 0.12f;
+                Trim($"MirrorStalk{s}", new Vector3(side * (halfW + 0.02f), belt + 0.05f, mirrorZ), new Vector3(0.2f, 0.03f, 0.04f), a.CarTrim);
+                Painted($"Mirror{s}", new Vector3(side * (halfW + 0.13f), belt + 0.1f, mirrorZ), new Vector3(0.09f, 0.1f, 0.18f));
+                Trim($"HandleF{s}", new Vector3(side * (halfW + 0.005f), belt - 0.14f, spec.DriverSeat.z + 0.5f), new Vector3(0.02f, 0.03f, 0.14f), a.Chrome);
+                if (shape == VehicleShape.Sedan || shape == VehicleShape.Suv)
+                {
+                    Trim($"HandleR{s}", new Vector3(side * (halfW + 0.005f), belt - 0.14f, spec.DriverSeat.z - 0.5f), new Vector3(0.02f, 0.03f, 0.14f), a.Chrome);
+                }
+
+                Trim($"Wiper{s}", new Vector3(side * 0.32f, belt + 0.035f, spec.CabinZ1 + 0.02f), new Vector3(0.5f, 0.015f, 0.02f), a.CarTrim)
+                    .transform.localRotation = Quaternion.Euler(0f, side * 18f, 0f);
             }
 
-            Primitive(PrimitiveType.Cube, "BumperF", b, new Vector3(0f, 0.42f, length / 2f + 0.05f), new Vector3(width - 0.1f, 0.25f, 0.15f), a.MetalDark, false);
-            Primitive(PrimitiveType.Cube, "BumperR", b, new Vector3(0f, 0.42f, -length / 2f - 0.05f), new Vector3(width - 0.1f, 0.25f, 0.15f), a.MetalDark, false);
-            Primitive(PrimitiveType.Cube, "CabinFloor", b, new Vector3(0f, 0.36f, -0.2f), new Vector3(width - 0.3f, 0.05f, 2.4f), a.CarInterior, false);
-            Primitive(PrimitiveType.Cube, "Dashboard", b, new Vector3(0f, 0.95f, 0.65f), new Vector3(width - 0.3f, 0.3f, 0.4f), a.CarInterior, false);
-            foreach (float x in new[] { -0.4f, 0.4f })
+            if (spec.Antenna)
+            {
+                Trim("Antenna", new Vector3(0.5f, roof + 0.17f, spec.CabinZ0 + 0.25f), new Vector3(0.012f, 0.16f, 0.012f), a.CarTrim, PrimitiveType.Cylinder)
+                    .transform.localRotation = Quaternion.Euler(-20f, 0f, 0f);
+            }
+
+            if (spec.RoofRails)
+            {
+                float railLength = spec.CabinZ1 - spec.CabinZ0 - 0.6f;
+                foreach (float side in new[] { -1f, 1f })
+                {
+                    // On the roof shoulder, where the crown has fallen to about the roof height.
+                    Trim($"RoofRail{(side < 0f ? "L" : "R")}", new Vector3(side * (halfW - 0.36f), roof + 0.02f, (spec.CabinZ0 + spec.CabinZ1) / 2f - 0.1f), new Vector3(0.05f, 0.06f, railLength), a.CarTrim);
+                }
+            }
+
+            if (spec.BedRails)
+            {
+                float bedLength = spec.BedZ1 - spec.BedZ0, bedMid = (spec.BedZ0 + spec.BedZ1) / 2f;
+                Trim("Tonneau", new Vector3(0f, spec.TailY + 0.05f, bedMid), new Vector3(width - 0.3f, 0.04f, bedLength - 0.1f), a.CarTrim);
+                foreach (float side in new[] { -1f, 1f })
+                {
+                    Trim($"BedRail{(side < 0f ? "L" : "R")}", new Vector3(side * (halfW - 0.08f), spec.TailY + 0.08f, bedMid), new Vector3(0.05f, 0.05f, bedLength), a.Chrome);
+                }
+            }
+
+            // Interior: two seats, a dashboard, a wheel, a console — seen through the glass from the chase camera.
+            Vector3 seat = spec.DriverSeat;
+            foreach (float x in new[] { seat.x, -seat.x })
             {
                 string s = x < 0f ? "Driver" : "Passenger";
-                Primitive(PrimitiveType.Cube, $"Seat{s}", b, new Vector3(x, 0.75f, -0.2f), new Vector3(0.5f, 0.5f, 0.5f), a.CarInterior, false);
-                Primitive(PrimitiveType.Cube, $"SeatBack{s}", b, new Vector3(x, 1.05f, -0.45f), new Vector3(0.5f, 0.6f, 0.12f), a.CarInterior, false);
+                Trim($"Seat{s}", new Vector3(x, seat.y + 0.12f, seat.z), new Vector3(0.5f, 0.24f, 0.52f), a.CarInterior);
+                Trim($"SeatBack{s}", new Vector3(x, seat.y + 0.46f, seat.z - 0.24f), new Vector3(0.5f, 0.56f, 0.12f), a.CarInterior);
+                Trim($"Headrest{s}", new Vector3(x, seat.y + 0.82f, seat.z - 0.24f), new Vector3(0.26f, 0.14f, 0.1f), a.CarInterior);
             }
 
-            Primitive(PrimitiveType.Cylinder, "SteeringWheel", b, new Vector3(-0.4f, 1.0f, 0.45f), new Vector3(0.36f, 0.02f, 0.36f), a.MetalDark, false)
+            Trim("Dashboard", new Vector3(0f, belt - 0.08f, spec.CabinZ1 - 0.28f), new Vector3(width - 0.3f, 0.26f, 0.5f), a.CarInterior);
+            Trim("Console", new Vector3(0f, seat.y + 0.1f, seat.z + 0.35f), new Vector3(0.24f, 0.22f, 0.9f), a.CarInterior);
+            Trim("CabinFloor", new Vector3(0f, floor + 0.04f, (spec.CabinZ0 + spec.CabinZ1) / 2f), new Vector3(width - 0.3f, 0.04f, spec.CabinZ1 - spec.CabinZ0 - 0.2f), a.CarInterior);
+            Trim("SteeringWheel", new Vector3(seat.x, belt + 0.02f, spec.CabinZ1 - 0.45f), new Vector3(0.36f, 0.02f, 0.36f), a.CarTrim, PrimitiveType.Cylinder)
                 .transform.localRotation = Quaternion.Euler(70f, 0f, 0f);
 
-            // Wheels: the collider is the physics, the Visual child is what you see; VehicleController poses one from the other.
+            // ---- Colliders: the physical footprint, on their own so the body can lean ----------------
+            var collidersGo = new GameObject("Colliders");
+            collidersGo.transform.SetParent(t, false);
+            void Box(string name, Vector3 pos, Vector3 size)
+            {
+                var go = new GameObject(name);
+                go.transform.SetParent(collidersGo.transform, false);
+                go.transform.localPosition = pos;
+                var box = go.AddComponent<BoxCollider>();
+                box.size = size;
+                box.sharedMaterial = a.CarBodyPhysics;
+            }
+
+            float chassisBottom = Mathf.Max(floor + 0.04f, 0.32f);
+            Box("Chassis", new Vector3(0f, (chassisBottom + belt) / 2f, 0f), new Vector3(width, belt - chassisBottom, length - 0.1f));
+            Box("Cabin", new Vector3(0f, (belt + roof) / 2f, (spec.CabinZ0 + spec.CabinZ1) / 2f), new Vector3(width - 0.3f, roof - belt, spec.CabinZ1 - spec.CabinZ0));
+
+            // ---- Wheels: a hardpoint each, the visual hanging below at the parked ride height --------
+            Mesh tyreMesh = CarBodyLibrary.Tyre(r, spec.TyreWidth);
+            Mesh rimMesh = CarBodyLibrary.Rim(r, spec.TyreWidth);
             var wheelsGo = new GameObject("Wheels");
             wheelsGo.transform.SetParent(t, false);
-            var wheels = new WheelCollider[4];
-            var visuals = new Transform[4];
+            var wheels = new VehicleWheel[4];
             (string name, float x, float z)[] corners = { ("FL", -wheelX, wheelZ), ("FR", wheelX, wheelZ), ("RL", -wheelX, -wheelZ), ("RR", wheelX, -wheelZ) };
             for (int i = 0; i < 4; i++)
             {
                 var wheelGo = new GameObject($"Wheel{corners[i].name}");
                 wheelGo.transform.SetParent(wheelsGo.transform, false);
-                wheelGo.transform.localPosition = new Vector3(corners[i].x, r, corners[i].z);
-                var wc = wheelGo.AddComponent<WheelCollider>();
-                wc.radius = r;
-                wc.suspensionDistance = def.SuspensionDistance;
-                wc.mass = 25f;
-                wc.wheelDampingRate = 1f;
-                wc.forceAppPointDistance = 0.1f;
-                wc.suspensionSpring = new JointSpring { spring = def.SuspensionSpring, damper = def.SuspensionDamper, targetPosition = 0.5f };
-                wc.forwardFriction = new WheelFrictionCurve { extremumSlip = 0.4f, extremumValue = 1f, asymptoteSlip = 0.8f, asymptoteValue = 0.6f, stiffness = def.ForwardStiffness };
-                wc.sidewaysFriction = new WheelFrictionCurve { extremumSlip = 0.2f, extremumValue = 1f, asymptoteSlip = 0.5f, asymptoteValue = 0.75f, stiffness = def.SidewaysStiffness };
-                wheels[i] = wc;
-
+                wheelGo.transform.localPosition = new Vector3(corners[i].x, hardpointY, corners[i].z);
                 var visual = new GameObject("Visual");
                 visual.transform.SetParent(wheelGo.transform, false);
-                Primitive(PrimitiveType.Cylinder, "Tyre", visual.transform, Vector3.zero, new Vector3(r * 2f, 0.11f, r * 2f), a.Tyre, false).transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
-                Primitive(PrimitiveType.Cylinder, "Hub", visual.transform, Vector3.zero, new Vector3(0.3f, 0.12f, 0.3f), a.Chrome, false).transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
-                visuals[i] = visual.transform;
+                visual.transform.localPosition = new Vector3(0f, -restLength, 0f);
+
+                // The rim faces outward; on the left that is -X, so the whole wheel visual is mirrored.
+                var wheelMesh = new GameObject("Wheel");
+                wheelMesh.transform.SetParent(visual.transform, false);
+                wheelMesh.transform.localRotation = corners[i].x < 0f ? Quaternion.Euler(0f, 180f, 0f) : Quaternion.identity;
+                var tyreGo = new GameObject("Tyre");
+                tyreGo.transform.SetParent(wheelMesh.transform, false);
+                tyreGo.AddComponent<MeshFilter>().sharedMesh = tyreMesh;
+                tyreGo.AddComponent<MeshRenderer>().sharedMaterial = a.Tyre;
+                var rimGo = new GameObject("Rim");
+                rimGo.transform.SetParent(wheelMesh.transform, false);
+                rimGo.AddComponent<MeshFilter>().sharedMesh = rimMesh;
+                rimGo.AddComponent<MeshRenderer>().sharedMaterial = a.Chrome;
+                for (int k = 0; k < spec.Spokes; k++)
+                {
+                    GameObject spoke = Primitive(PrimitiveType.Cube, $"Spoke{k}", rimGo.transform, Vector3.zero, new Vector3(0.05f, 0.07f, r * 0.56f), a.Chrome, collider: false);
+                    spoke.transform.localRotation = Quaternion.Euler(360f * k / spec.Spokes, 0f, 0f);
+                    spoke.transform.localPosition = spoke.transform.localRotation * new Vector3(spec.TyreWidth * 0.22f, 0f, r * 0.3f);
+                }
+
+                Primitive(PrimitiveType.Sphere, "HubCap", rimGo.transform, new Vector3(spec.TyreWidth * 0.3f, 0f, 0f), new Vector3(0.08f, 0.13f, 0.13f), a.Chrome, collider: false);
+
+                var wheel = wheelGo.AddComponent<VehicleWheel>();
+                wheel.Configure(isSteered: i < 2, isDriven: true, axleIndex: i < 2 ? 0 : 1, sideSign: corners[i].x < 0f ? -1 : 1, visual.transform, restLength);
+                wheels[i] = wheel;
+                // A guard box around the hardpoint gives the corner a physical edge against kerbs and walls; its
+                // underside clears a kerb, so the probe alone decides how the wheel meets the road.
+                Box($"WheelGuard{corners[i].name}", new Vector3(corners[i].x, hardpointY, corners[i].z), new Vector3(0.36f, 0.36f, r * 2f + 0.1f));
             }
 
             Transform Anchor(string name, Vector3 pos)
@@ -829,13 +929,32 @@ namespace Vent.Editor
                 return go.transform;
             }
 
-            Transform seatAnchor = Anchor("Seat", new Vector3(-0.4f, 0.45f, -0.2f));
-            Transform exitL = Anchor("ExitL", new Vector3(-1.6f, 0f, 0.2f));
-            Transform exitR = Anchor("ExitR", new Vector3(1.6f, 0f, 0.2f));
-            Transform camTarget = Anchor("CameraTarget", new Vector3(0f, van ? 1.3f : 1.1f, 0f));
+            Transform seatAnchor = Anchor("Seat", seat);
+            Transform exitL = Anchor("ExitL", new Vector3(-(halfW + 0.7f), 0f, seat.z + 0.2f));
+            Transform exitR = Anchor("ExitR", new Vector3(halfW + 0.7f, 0f, seat.z + 0.2f));
+            Transform camTarget = Anchor("CameraTarget", new Vector3(0f, roof - 0.25f, 0f));
+
+            // ---- Headlamp beams: off until someone gets in --------------------------------------------
+            var beams = new Light[2];
+            for (int i = 0; i < 2; i++)
+            {
+                float side = i == 0 ? -1f : 1f;
+                Transform beamT = Anchor(i == 0 ? "HeadlightBeamL" : "HeadlightBeamR", new Vector3(side * lampX, headY, halfL));
+                beamT.localRotation = Quaternion.Euler(6f, 0f, 0f);
+                var beam = beamT.gameObject.AddComponent<Light>();
+                beam.type = LightType.Spot;
+                beam.range = 45f;
+                beam.spotAngle = 62f;
+                beam.innerSpotAngle = 30f;
+                beam.intensity = 7f;
+                beam.color = new Color(1f, 0.95f, 0.82f);
+                beam.shadows = LightShadows.None;
+                beam.enabled = false;
+                beams[i] = beam;
+            }
 
             // Drive-by: the driver's arm out of the window, pistol in hand. Off until someone sits down.
-            Transform armT = Anchor("Arm", new Vector3(-(width / 2f + 0.02f), 1.05f, -0.1f));
+            Transform armT = Anchor("Arm", new Vector3(-(halfW + 0.02f), belt + 0.14f, seat.z + 0.1f));
             Primitive(PrimitiveType.Cube, "Sleeve", armT, new Vector3(0f, 0f, 0.2f), new Vector3(0.09f, 0.09f, 0.4f), a.Fabric, false);
             Primitive(PrimitiveType.Cube, "Hand", armT, new Vector3(0f, 0f, 0.45f), new Vector3(0.09f, 0.1f, 0.1f), a.Skin, false);
             Primitive(PrimitiveType.Cube, "Slide", armT, new Vector3(0f, 0.05f, 0.55f), new Vector3(0.03f, 0.04f, 0.18f), a.GunSteel, false);
@@ -853,29 +972,38 @@ namespace Vent.Editor
             // Parked cars carve the NavMesh so zombies walk around them, not through them.
             var obstacle = root.AddComponent<NavMeshObstacle>();
             obstacle.shape = NavMeshObstacleShape.Box;
-            obstacle.center = new Vector3(0f, 0.7f, 0f);
-            obstacle.size = new Vector3(width + 0.1f, 1.4f, length + 0.1f);
+            obstacle.center = new Vector3(0f, spec.Height / 2f, 0f);
+            obstacle.size = new Vector3(width + 0.1f, spec.Height, length + 0.1f);
             obstacle.carving = true;
             obstacle.carveOnlyStationary = true;
             obstacle.carvingMoveThreshold = 0.5f;
             obstacle.carvingTimeToStationary = 0.5f;
 
-            var engine = root.AddComponent<AudioSource>();
-            engine.playOnAwake = false;
-            engine.loop = true;
-            engine.spatialBlend = 1f;
-            engine.rolloffMode = AudioRolloffMode.Linear;
-            engine.minDistance = 3f;
-            engine.maxDistance = 45f;
-            engine.dopplerLevel = 0f;
+            AudioSource Loop(float minDistance, float maxDistance)
+            {
+                var source = root.AddComponent<AudioSource>();
+                source.playOnAwake = false;
+                source.loop = true;
+                source.spatialBlend = 1f;
+                source.rolloffMode = AudioRolloffMode.Linear;
+                source.minDistance = minDistance;
+                source.maxDistance = maxDistance;
+                source.dopplerLevel = 0f;
+                return source;
+            }
+
+            AudioSource engine = Loop(3f, 45f);
+            AudioSource tyres = Loop(2f, 30f);
 
             var controller = root.AddComponent<VehicleController>();
-            controller.Configure(def, wheels, visuals, paintRenderers.ToArray());
-            var seat = root.AddComponent<VehicleSeat>();
-            seat.Configure(seatAnchor, exitL, exitR, camTarget, arm, muzzleOut.transform, portOut.transform);
+            controller.Configure(def, wheels, paintRenderers.ToArray());
+            var seatComponent = root.AddComponent<VehicleSeat>();
+            seatComponent.Configure(seatAnchor, exitL, exitR, camTarget, arm, muzzleOut.transform, portOut.transform);
             var roadkill = root.AddComponent<VehicleRoadkill>();
-            roadkill.Configure(a.BloodImpactPrefab, new Vector3(0f, 0.8f, 0f), new Vector3(width / 2f + 0.1f, 0.9f, length / 2f + 0.2f));
-            root.AddComponent<VehicleAudio>().Configure(engine);
+            roadkill.Configure(a.BloodImpactPrefab, new Vector3(0f, spec.Height / 2f, 0f), new Vector3(halfW + 0.1f, spec.Height / 2f, halfL + 0.2f));
+            root.AddComponent<VehicleAudio>().Configure(engine, tyres);
+            root.AddComponent<VehicleBodyMotion>().Configure(bodyGo.transform, def.RestCompression);
+            root.AddComponent<VehicleLights>().Configure(beams, headLamps.ToArray(), tailLamps.ToArray());
 
             foreach (Renderer rend in root.GetComponentsInChildren<Renderer>(true))
             {
@@ -884,6 +1012,11 @@ namespace Vent.Editor
             }
 
             Layers.SetRecursively(root, Layers.VehicleIndex);
+            foreach (Light beam in beams)
+            {
+                beam.gameObject.layer = Layers.PlayerIndex; // lights live on a layer both cameras cull in (see CreatePlayer)
+            }
+
             return Save(root);
         }
 

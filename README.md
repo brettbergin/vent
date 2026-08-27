@@ -22,13 +22,18 @@ make help     #    everything else (windowed test run, open in the editor, logs,
 
 The `make` targets wrap the scripts in `tools/`; call those directly if you prefer.
 
+If a build feels slow, read the numbers before blaming it: the player writes `[FrameRateLog]` lines
+(scene, resolution, fps, mean and worst frame) to `~/Library/Logs/Vent Studio/Vent/Player.log` every
+five seconds, and `make gpubench` times a fixed workload on each GPU — a MacBook on a small charger
+with a flat battery caps its discrete GPU to a few percent, and no build runs well on that.
+
 Or open the project in the Editor, run **Vent ▸ Rebuild Everything**, open
 `Assets/_Project/Scenes/Boot.unity` and press Play.
 
 Controls: WASD move · Shift sprint · Space jump · Mouse look · LMB fire · RMB aim · R reload ·
 1/2/Q/scroll switch weapon · **E interact** (read the whiteboard, take a cable, patch a rack, open a
 drawer, open the door, get in or out of a car) · Esc pause.
-Driving: W/S throttle and brake · A/D steer · Space handbrake · mouse orbits the chase camera ·
+Driving: W/S throttle and brake (hold S at a stop to reverse) · A/D steer · Space handbrake · mouse orbits the chase camera ·
 LMB fires the pistol out of the window. Gamepad is bound too (B = interact).
 
 ## The game loop
@@ -89,15 +94,37 @@ LMB fires the pistol out of the window. Gamepad is bound too (B = interact).
   lit and what has a key in it. Drawers open freely whenever the player asks — the key simply does not
   exist until the servers are patched, so opening all thirty-odd of them early finds stationery.
   The current step stands on the HUD over `Evt_Objective`.
-* **Cars.** Twenty are parked on the bays nearest the door (the red sedan is the hero). `E` gets in:
+* **Cars.** Twenty are parked on the bays nearest the door (the red sedan is the hero; the rest are a
+  seeded mix of sedans, hatchbacks, SUVs, pickups and panel vans). Each body is a *loft* grown from a
+  station list in `Editor/CarBodyLibrary.cs` — half-width, belt line and roof height along the length,
+  swept into a hull with a rocker, side bulge, window sill, tumblehome and crowned roof, wheel wells cut
+  into the sills, and the glass as its own submesh (the roof surface becomes the windscreen where it
+  slopes to the belt; segments between the pillars are windows). Revolved tyres, dished spoked rims,
+  clear-coat paint (URP Complex Lit), bumpers, grille, lamps in bezels, plates, mirrors, handles,
+  wipers and an interior finish it; `Vent ▸ Snapshot Cars` renders every style to `Logs/snapshot-Car_*.png`.
+  `E` gets in:
   the player root rides the seat (so zombies keep chasing), the camera moves to a third-person chase
   rig (`VehicleChaseCamera`), the SMG is locked away and the pistol goes out of the window
-  (`WeaponInventory.EnterVehicleMode`, `VehicleDriveByArm`). `VehicleController` is an arcade
-  Rigidbody on four WheelColliders; parked cars are kinematic. `VehicleRoadkill` sweeps a box each
-  physics step and applies speed-scaled damage in code — fatal above 9 m/s — because zombies are
-  NavMeshAgents nothing can push (`DamageKind.Vehicle`; the body is flung by `ZombieAnimator.PlayRoadkill`).
-  Roadkill counts for the level but grants no weapon XP, like the Nuke perk. `Gameplay/Vehicles/VehicleDriver`
-  is the only class that sees both the player and the car; the vehicles assembly depends on Core alone.
+  (`WeaponInventory.EnterVehicleMode`, `VehicleDriveByArm`). `VehicleController` is a Rigidbody with
+  four *probe* wheels and no WheelColliders: each physics step it sweeps a tyre-sized sphere down each
+  suspension, applies a spring at the hardpoint and a tyre force at the contact, and hands the numbers
+  to engine-free models in `Vehicles/Simulation` — `TyreModel` (grip against slip angle, a friction
+  circle, never pushing a patch past zero sideways), `SuspensionModel`, `SteeringModel` (lock shrinks
+  with speed to a lateral-g budget, rate-limited, Ackermann), `Drivetrain` (torque curve, four-speed
+  automatic, clutch slip at rest, a limiter you lean on). Cornering forces act at the height of the
+  centre of mass, so steering can push the car sideways but can never roll it; anti-roll bars keep it
+  flat over kerbs, a yaw assist turns it toward the line the wheel asks for and an upright torque levels
+  it after a knock. Body roll, squat and dive are painted on the visual body (`VehicleBodyMotion`);
+  headlamps come on with the engine and the tail lamps brighten under braking (`VehicleLights`); the
+  engine loop follows the real RPM through the gears and a tyre loop swells with the slip (`VehicleAudio`).
+  Parked cars are kinematic. `VehicleRoadkill` sweeps a box each physics step and applies speed-scaled
+  damage in code — fatal above 9 m/s — because zombies are NavMeshAgents nothing can push
+  (`DamageKind.Vehicle`; the body is flung by `ZombieAnimator.PlayRoadkill`). Roadkill counts for the
+  level but grants no weapon XP, like the Nuke perk. `Gameplay/Vehicles/VehicleDriver` is the only class
+  that sees both the player and the car; the vehicles assembly depends on Core alone.
+  `VehicleHandlingTests` drives the sedan on a proving ground and asserts it reaches its top speed
+  through the gears, stops, holds full lock at top speed on all four wheels, slides on the handbrake,
+  takes a kerb at speed without leaving the ground, reverses, and runs straight hands-off.
 * **Perks.** A weapon kill has a chance (`PerkDropTable`, default 12%) to leave a glowing orb where
   the zombie fell; walk through it to collect. Instant Reload tops up both guns at once, Invulnerable
   (10 s) ignores damage, One Shot (8 s) makes any hit lethal, Nuke kills every zombie in the building
@@ -145,6 +172,8 @@ Patterns you will see, and why:
 | **Text without a font asset** | `Editor/GlyphFont.cs` → `TextureFactory.WhiteboardHint` | The lobby whiteboard has to carry words a player can read, and there is no font to import. A 5×7 bitmap font written as rows of `'1'`, so the letterforms are reviewable in the diff, stamped into a 1024×640 albedo (non-square: the board is 1.8 × 1.1 m and Unity's cube gives each face 0..1 UVs). The plate is spun 180° because the cube mirrors its +Z face. |
 | **Interact by looking** | `Core/Interaction/IInteractable`, `Player/Interaction/PlayerInteractor` | A camera raycast, not a trigger volume: the prompt answers "what am I looking at". The door and the car seats implement one Core interface; the HUD prompt travels over `Evt_Prompt`, so UI, Player and the things being used never reference each other. |
 | **One camera, borrowed** | `Vehicles/Runtime/VehicleChaseCamera` | The chase rig re-parents the player's own camera rather than owning a second one: `Camera.main`, the listener, post-processing and `CameraMotion`'s shake all keep working, and the rig's forward is the drive-by crosshair. |
+| **Bodies from profiles** | `Editor/CarBodyLibrary.cs` | A silhouette is a dozen stations of three numbers and two flags, reviewable in a diff, and the loft turns any of them into a hull with wells, glass and an underbody. Adding a body style is adding a station list; the physics numbers for it live in `VehicleDefinition.ApplyDefaults`, keyed by the same enum, and `VehiclePrefabTests` checks the two agree on track, wheelbase and wheel size. |
+| **A car as arithmetic** | `Vehicles/Simulation/*`, `VehicleController`, `VehicleWheel` | WheelColliders were twitchy, opaque and tipped the car over at speed. The replacement is a Rigidbody with four probe wheels: the controller sweeps for the road, and every rule — tyre grip against slip, the friction circle, the spring, the steering lock a speed allows, the gearbox — is a static function on plain structs, unit tested in EditMode. Cornering forces are applied at centre-of-mass height, so a roll from steering is impossible by construction rather than by tuning; the visible lean is cosmetic. |
 | **Damage in code, never by contact** | `VehicleRoadkill`, `Zombie.TryStrike`, `ProjectBootstrap.ConfigureCollisionMatrix` | Zombies are agents with static hitboxes, so cars pass through them (matrix) and hurt them with an overlap query, exactly as a zombie's own swing hurts the player. |
 | **Generated foliage, one shader** | `Assets/_Project/Shaders/Foliage.shader`, `Editor/FoliageTextureFactory.cs`, `Editor/FoliageLibrary.cs` | Every leaf in the game is a card cut from one painted 2048² atlas (monstera, fig, fern, snake plant, pothos, canopy clusters, blossom, conifer, grass, weeds, litter, ivy, boxwood, palm; albedo + normal, drawn from analytic leaf profiles with veins and lobes). `FoliageLibrary` grows plants from those cards — curved leaves on stems, tapered bark trunks, vines, canopies of bent-normal cards — as deterministic mesh variants that static-batch. `Vent/Foliage` is a hand-written URP 17 shader: cutout with coverage-preserving mips, two-sided with the back face relit, normal-mapped, vertex-colour wind (gust lean + leaf flutter, world-space so batching keeps it), leaf translucency from the sun and the window spots gated by light layers and shadows, Forward+ light loop, SSAO/DepthNormals, wind-aware shadow caster. Crowns, shrubs and hedges use `M_FoliageCanopy`, which fades a card out as its quad turns edge-on to the viewer (measured from the quad's own normal, not the bent shading normal) so a metre-wide leaf never rasterises as a bright blade; ground cover and indoor plants keep every card, since flat litter is seen edge-on from standing height and a single big leaf must read from any angle. Canopy cards are placed by their centre so none hangs out past the crown silhouette, and pruning a street crown lifts whole cards rather than snapping loose vertices to the cut line, which used to shear a card and smear its atlas cell across the canopy. Foliage is probe-lit, never lightmapped. Indoors: species-varied pots, corner floor plants, desk plants, pothos trailing off shelves. Outdoors: broadleaf/birch/conifer park trees with leaf litter, crown-lifted street trees along every avenue, box hedges, flowering planters and beds, a real lawn of tufts in the park, ivy on the office and apartment walls, weeds along the barrier and yards. |
 | **District without lightmaps** | `DistrictGenerator`, `BuildingGenerator.BuildExterior` | The sun casts soft shadows now, on a rendering layer the interiors are not on, with `customShadowLayers` so ceilings still block it. The district is static for batching but not for GI, so the bake stays around a minute; outdoor light probes and one big reflection probe cover the movers. |

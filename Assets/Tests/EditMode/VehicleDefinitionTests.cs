@@ -4,11 +4,14 @@ using Vent.Vehicles.Data;
 
 namespace Vent.Tests.EditMode
 {
-    /// <summary>The car's numbers: sane defaults for both bodies, and the two pure curves the controller and roadkill rely on.</summary>
+    /// <summary>The car's numbers: sane defaults for both bodies, and the pure curves the controller and roadkill rely on.</summary>
     public sealed class VehicleDefinitionTests
     {
         [TestCase(VehicleShape.Sedan)]
         [TestCase(VehicleShape.Van)]
+        [TestCase(VehicleShape.Hatchback)]
+        [TestCase(VehicleShape.Suv)]
+        [TestCase(VehicleShape.Pickup)]
         public void DefaultsAreSane(VehicleShape shape)
         {
             var def = ScriptableObject.CreateInstance<VehicleDefinition>();
@@ -19,7 +22,11 @@ namespace Vent.Tests.EditMode
             Assert.Greater(def.RoadkillLethalSpeed, def.RoadkillMinSpeed);
             Assert.Greater(def.RoadkillMinSpeed, 0f);
             Assert.That(def.OccupantDamageFactor, Is.GreaterThan(0f).And.LessThanOrEqualTo(1f));
-            Assert.Less(def.HandbrakeSidewaysStiffness, def.SidewaysStiffness, "the handbrake loosens the rear");
+            Assert.Less(def.HandbrakeGripScale, 1f, "the handbrake loosens the rear");
+            Assert.AreEqual(1f, def.TyreForceHeight, "cornering forces act at the centre of mass, so steering cannot roll the car");
+            Assert.Less(def.CentreOfMass.y, def.WheelRadius + 0.05f, "the centre of mass sits at hub height");
+            Assert.Less(def.RestCompression, def.SuspensionTravel * 0.5f, "the springs carry the car in the first half of their travel");
+            Assert.Greater(def.Drivetrain.GearRatios.Length, 2, "enough gears to hear a shift");
             Object.DestroyImmediate(def);
         }
 
@@ -42,8 +49,9 @@ namespace Vent.Tests.EditMode
             var def = ScriptableObject.CreateInstance<VehicleDefinition>();
             def.ApplyDefaults(VehicleShape.Sedan);
             Assert.AreEqual(def.MaxSteerDegrees, def.SteerAngle(0f), 0.001f);
-            Assert.Less(def.SteerAngle(1f), def.SteerAngle(0f));
-            Assert.Greater(def.SteerAngle(1f), 0f);
+            Assert.Less(def.SteerAngle(def.TopSpeed), 6f, "a few degrees is all the tyres can use at the top speed");
+            Assert.Greater(def.SteerAngle(def.TopSpeed), 0f);
+            Assert.Greater(def.SteerAngle(8f), def.SteerAngle(16f));
             Object.DestroyImmediate(def);
         }
     }

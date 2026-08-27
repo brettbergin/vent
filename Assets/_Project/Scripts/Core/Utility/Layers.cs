@@ -31,6 +31,9 @@ namespace Vent.Core.Utility
         /// <summary>What blocks line of sight for spawn selection (walls and props only). Cars are deliberately not occluders: a driver is still visible.</summary>
         public static int OcclusionMask => LayerMask.GetMask(Environment);
 
+        /// <summary>What a car's wheels stand on: the streets, kerbs and floors. Never other cars (their bodies collide) and never zombies.</summary>
+        public static int DriveableMask => LayerMask.GetMask(Environment);
+
         /// <summary>What the player can look at and press Interact on: doors (Environment) and cars.</summary>
         public static int InteractMask => LayerMask.GetMask(Environment, Vehicle);
 

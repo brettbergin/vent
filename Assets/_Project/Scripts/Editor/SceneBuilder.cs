@@ -19,6 +19,7 @@ using Vent.Gameplay.Perks;
 using Vent.Gameplay.Vehicles;
 using Vent.Gameplay.World;
 using Vent.Player;
+using Vent.Vehicles.Data;
 using Vent.Vehicles.Runtime;
 using Vent.UI;
 using Vent.UI.Screens;
@@ -55,8 +56,10 @@ namespace Vent.Editor
             a.ImpactPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{Paths.Prefabs}/VFX_Impact.prefab");
             a.BloodImpactPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{Paths.Prefabs}/VFX_BloodImpact.prefab");
             a.ShellCasingPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{Paths.Prefabs}/VFX_ShellCasing.prefab");
-            a.SedanPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{Paths.Prefabs}/Vehicle_Sedan.prefab");
-            a.VanPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{Paths.Prefabs}/Vehicle_Van.prefab");
+            foreach (VehicleShape shape in System.Enum.GetValues(typeof(VehicleShape)))
+            {
+                a.SetVehiclePrefab(shape, AssetDatabase.LoadAssetAtPath<GameObject>($"{Paths.Prefabs}/Vehicle_{CarBodyLibrary.For(shape).Name}.prefab"));
+            }
         }
 
         public static void BuildAll(GameAssets a)

@@ -39,7 +39,7 @@ namespace Vent.Gameplay.Vehicles
 
         [Header("Feel")]
         [SerializeField, Min(0f), Tooltip("Extra field of view at top speed.")]
-        private float fovBoostDegrees = 10f;
+        private float fovBoostDegrees = 14f;
         [SerializeField, Range(0f, 1f), Tooltip("How much of the pistol's recoil reaches the chase camera.")]
         private float recoilToCamera = 0.4f;
         [SerializeField, Min(1f)] private float speedPublishHz = 15f;
@@ -257,7 +257,7 @@ namespace Vent.Gameplay.Vehicles
             }
 
             float speed01 = vehicle.Speed01;
-            chase.SetHeadingSpeed(Mathf.Abs(vehicle.ForwardSpeed));
+            chase.SetMotion(vehicle.Body.linearVelocity, speed01);
             player.SetSeatedMotion(speed01);
             if (player.Motion != null)
             {

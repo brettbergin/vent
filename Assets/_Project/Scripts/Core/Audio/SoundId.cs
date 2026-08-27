@@ -43,6 +43,8 @@ namespace Vent.Core.Audio
         CarDoor,
         CarImpact,
         Roadkill,
+        /// <summary>Tyres sliding: a loop the car fades in and out with the slip.</summary>
+        TyreSkid,
         CablePickup,
         PanelDenied,
         PowerRestore,

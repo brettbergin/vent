@@ -138,6 +138,8 @@ namespace Vent.Core.Audio
                     return Mix(Tone(0.7f, 320f, 210f, 3f, 0.18f), Lowpass(NoiseBurst(rng, 0.5f, 6f, 0.3f), 700f), Lowpass(NoiseBurst(rng, 0.05f, 120f), 2000f, 0.4f));
                 case SoundId.EngineLoop:
                     return Engine(rng, seconds: 2f, baseHz: 55f);
+                case SoundId.TyreSkid:
+                    return Skid(rng, seconds: 1.5f);
                 case SoundId.CarStart:
                     // Starter motor winding, then the engine catching.
                     return Mix(Tone(0.5f, 40f, 55f, 3f, 0.6f), Lowpass(NoiseBurst(rng, 0.45f, 6f), 700f, 0.5f), Tone(0.35f, 30f, 60f, 4f, 0.4f));
@@ -224,6 +226,47 @@ namespace Vent.Core.Audio
         // ------------------------------------------------------------------ recipes
 
         /// <summary>White noise with an exponential decay envelope.</summary>
+        /// <summary>Rubber dragged over asphalt: band-limited noise with the chatter of a juddering tyre, looped seamlessly.</summary>
+        private static float[] Skid(System.Random rng, float seconds)
+        {
+            int n = Mathf.RoundToInt(seconds * SampleRate);
+            var s = new float[n];
+            for (int i = 0; i < n; i++)
+            {
+                s[i] = (float)rng.NextDouble() * 2f - 1f;
+            }
+
+            Highpass(s, 900f);
+            Lowpass(s, 2600f);
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)SampleRate;
+                float chatter = 0.7f + 0.3f * Mathf.Sin(2f * Mathf.PI * 27f * t) * Mathf.Sin(2f * Mathf.PI * 3.1f * t);
+                s[i] *= chatter;
+            }
+
+            float peak = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                peak = Mathf.Max(peak, Mathf.Abs(s[i]));
+            }
+
+            float k = peak > 0f ? 0.8f / peak : 1f;
+            for (int i = 0; i < n; i++)
+            {
+                s[i] *= k;
+            }
+
+            const int fade = 256;
+            for (int i = 0; i < fade; i++)
+            {
+                float u = i / (float)fade;
+                s[n - fade + i] = Mathf.Lerp(s[n - fade + i], s[i], u);
+            }
+
+            return s;
+        }
+
         private static float[] NoiseBurst(System.Random rng, float seconds, float decayRate, float gain = 1f)
         {
             int n = Mathf.CeilToInt(seconds * SampleRate);
