@@ -106,6 +106,12 @@
       </ui:Label>
     </ui:VisualElement>
 
+    <ui:VisualElement name="objective" class="objective" picking-mode="Ignore">
+      <ui:Label name="objective-text" text="" class="objective__text">
+        <Bindings><ui:DataBinding property="text" data-source-path="ObjectiveText" binding-mode="ToTarget" /></Bindings>
+      </ui:Label>
+    </ui:VisualElement>
+
     <ui:VisualElement name="prompt" class="prompt" picking-mode="Ignore">
       <ui:Label name="prompt-text" text="" class="prompt__text">
         <Bindings><ui:DataBinding property="text" data-source-path="PromptText" binding-mode="ToTarget" /></Bindings>

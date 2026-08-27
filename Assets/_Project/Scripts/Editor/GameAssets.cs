@@ -40,6 +40,8 @@ namespace Vent.Editor
         public VoidEventChannel QuitRequested;
         public StringEventChannel Prompt;
         public StringEventChannel Announcement;
+        public StringEventChannel Objective;
+        public VoidEventChannel KeyFound;
         public FloatEventChannel VehicleSpeed;
 
         // Data
@@ -65,7 +67,9 @@ namespace Vent.Editor
             // Cars
             CarGlass, Tyre, Chrome, CarInterior, Headlight, Taillight, Skin,
             // Nature: the leaf atlas (outdoor wind and the still indoor version), bark, mulch, glazed pots
-            Foliage, FoliageCanopy, FoliageIndoor, Bark, Birch, Mulch, Ceramic, CeramicDark;
+            Foliage, FoliageCanopy, FoliageIndoor, Bark, Birch, Mulch, Ceramic, CeramicDark,
+            // Key hunt: the cable jacket that has to catch the eye across a room, and the hint board
+            CableBlue, WhiteboardHint;
         public Material[] CarPaints;
 
         // Prefabs

@@ -1,6 +1,7 @@
 using UnityEngine;
 using Vent.Core.Services;
 using Vent.Gameplay.Levels;
+using Vent.Gameplay.World;
 using Vent.Player;
 
 namespace Vent.Gameplay.Flow
@@ -14,15 +15,18 @@ namespace Vent.Gameplay.Flow
         [SerializeField] private LevelDirector director;
         [SerializeField] private PlayerSpawnPoint spawnPoint;
         [SerializeField] private PlayerCharacter player;
+        [SerializeField] private KeyHuntDirector keyHunt;
 
         public LevelDirector Director => director;
         public PlayerCharacter Player => player;
+        public KeyHuntDirector KeyHunt => keyHunt;
 
-        public void Configure(LevelDirector levelDirector, PlayerSpawnPoint spawn, PlayerCharacter playerCharacter)
+        public void Configure(LevelDirector levelDirector, PlayerSpawnPoint spawn, PlayerCharacter playerCharacter, KeyHuntDirector hunt)
         {
             director = levelDirector;
             spawnPoint = spawn;
             player = playerCharacter;
+            keyHunt = hunt;
         }
 
         private void OnEnable() => GameServices.Register(this);
@@ -37,6 +41,9 @@ namespace Vent.Gameplay.Flow
             }
 
             director?.StartRun();
+            // After StartRun: its level-1 announcement relocks the front door and clears the key,
+            // so the hunt's fresh roll and objective line have to land on top of that, not under it.
+            keyHunt?.BeginRun();
         }
 
         public void EndRun()

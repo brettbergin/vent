@@ -90,12 +90,24 @@ namespace Vent.Editor
         private static void Desk(Transform t, GameAssets a, System.Random rng)
         {
             Box(t, "Top", new Vector3(0f, 0.74f, 0f), new Vector3(1.6f, 0.04f, 0.8f), a.Wood);
-            Box(t, "Modesty", new Vector3(0f, 0.45f, -0.3f), new Vector3(1.5f, 0.5f, 0.03f), a.Wood, collider: false);
+            // Modesty board on the visitor side (+Z), which is the whole point of one: it hides the
+            // sitter's legs from the room. It used to be at -0.3, i.e. across the sitter's own
+            // knees, which left the chair side looking like the back of the desk once the drawers
+            // moved there too. The screen, keyboard and chair are all on -Z; this belongs opposite.
+            Box(t, "Modesty", new Vector3(0f, 0.45f, 0.3f), new Vector3(1.5f, 0.5f, 0.03f), a.Wood, collider: false);
             Box(t, "Pedestal", new Vector3(0.55f, 0.35f, 0.05f), new Vector3(0.42f, 0.7f, 0.6f), a.MetalGrey);
-            for (int i = 0; i < 3; i++)
+
+            // Drawers open toward the chair (-Z), the same side as the keyboard and the screen —
+            // where a desk's pedestal drawers actually are. They used to face the back of the desk,
+            // which meant spotting the lit monitor from the chair and then walking round to open it.
+            // The anchor is turned to face that way, so the leaf and the direction it slides need no
+            // special case.
+            const float drawerFace = -0.26f, drawerBase = 0.13f;
+            Empty(t, "DrawerAnchor", new Vector3(0.55f, drawerBase, drawerFace)).transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+            for (int i = 1; i < 3; i++)
             {
-                Box(t, $"Drawer{i}", new Vector3(0.55f, 0.13f + i * 0.22f, 0.36f), new Vector3(0.36f, 0.18f, 0.01f), a.Plastic, collider: false);
-                Box(t, $"Handle{i}", new Vector3(0.55f, 0.13f + i * 0.22f, 0.37f), new Vector3(0.12f, 0.015f, 0.01f), a.MetalGrey, collider: false);
+                Box(t, $"Drawer{i}", new Vector3(0.55f, drawerBase + i * 0.22f, drawerFace), new Vector3(0.36f, 0.18f, 0.01f), a.Plastic, collider: false);
+                Box(t, $"Handle{i}", new Vector3(0.55f, drawerBase + i * 0.22f, drawerFace - 0.01f), new Vector3(0.12f, 0.015f, 0.01f), a.MetalGrey, collider: false);
             }
 
             Box(t, "LegL", new Vector3(-0.72f, 0.36f, 0f), new Vector3(0.05f, 0.72f, 0.7f), a.MetalGrey);
@@ -304,6 +316,8 @@ namespace Vent.Editor
         private static void ServerRack(Transform t, GameAssets a, System.Random rng)
         {
             Box(t, "Frame", new Vector3(0f, 1.0f, 0f), new Vector3(0.6f, 2.0f, 1.0f), a.MetalDark);
+            // Chest height on the rack front, proud of the blades: where the patch panel goes.
+            Empty(t, "PanelAnchor", new Vector3(0f, 1.35f, 0.515f));
             Box(t, "Door", new Vector3(0f, 1.0f, 0.502f), new Vector3(0.56f, 1.9f, 0.004f), a.MetalGrey, collider: false);
             for (int u = 0; u < 12; u++)
             {
@@ -354,6 +368,7 @@ namespace Vent.Editor
             Box(t, "Marker", new Vector3(-0.2f, 0.955f, 0.06f), new Vector3(0.12f, 0.02f, 0.02f), a.BookA, collider: false);
             Box(t, "Scrawl", new Vector3(-0.3f, 1.65f, 0.047f), new Vector3(0.7f, 0.02f, 0.003f), a.MetalDark, collider: false);
             Box(t, "Scrawl2", new Vector3(0.1f, 1.45f, 0.047f), new Vector3(0.9f, 0.02f, 0.003f), a.BookB, collider: false);
+            Empty(t, "FaceAnchor", new Vector3(0f, 1.5f, 0.05f));
         }
 
         private static void Copier(Transform t, GameAssets a)
@@ -397,6 +412,178 @@ namespace Vent.Editor
         }
 
         // ------------------------------------------------------------------ primitives
+
+        // ------------------------------------------------------------------ key hunt
+
+        /// <summary>
+        /// The sliding bottom drawer of a desk. Built as its own root so it can move (the rest of
+        /// the desk is batching-static) and so the <c>Front</c> box is the only collider under it:
+        /// <c>PlayerInteractor</c> resolves an interactable by walking *up* from whatever it hit,
+        /// so a hit on the desktop or a leg finds nothing and only the drawer front prompts.
+        /// </summary>
+        public static GameObject DrawerLeaf(Transform parent, GameAssets a)
+        {
+            var root = new GameObject("Drawer");
+            root.transform.SetParent(parent, false);
+            Transform t = root.transform;
+
+            // 3 cm proud of the pedestal's front face, so the interactor's ray reaches the drawer
+            // before the pedestal collider stops it.
+            Box(t, "Front", new Vector3(0f, 0f, 0.005f), new Vector3(0.36f, 0.18f, 0.03f), a.Plastic);
+            Box(t, "Handle", new Vector3(0f, 0f, 0.025f), new Vector3(0.12f, 0.015f, 0.012f), a.MetalGrey, collider: false);
+
+            // The key, tucked at the back where it is only visible once the drawer is pulled out.
+            var key = new GameObject("Key");
+            key.transform.SetParent(t, false);
+            key.transform.localPosition = new Vector3(0f, -0.03f, -0.16f);
+            Box(key.transform, "Shank", new Vector3(0f, 0f, 0f), new Vector3(0.008f, 0.004f, 0.075f), a.Brass, collider: false);
+            Box(key.transform, "Bit", new Vector3(0.012f, 0f, -0.03f), new Vector3(0.018f, 0.004f, 0.016f), a.Brass, collider: false);
+            Cyl(key.transform, "Bow", new Vector3(0f, 0f, 0.045f), 0.016f, 0.002f, a.Brass, collider: false)
+                .transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            key.SetActive(false);
+
+            Layers.SetRecursively(root, Layers.EnvironmentIndex);
+            return root;
+        }
+
+        /// <summary>
+        /// The patch panel on a rack front: a plate of ports whose lamps go from amber to green
+        /// when the cables land. Its own root and its own collider, for the same reason the drawer
+        /// has one — the rack itself must not become one big interactable.
+        /// </summary>
+        public static GameObject PatchPanelRig(Transform parent, GameAssets a, out Renderer[] leds, out Light lamp)
+        {
+            var root = new GameObject("PatchPanel");
+            root.transform.SetParent(parent, false);
+            Transform t = root.transform;
+
+            Box(t, "Plate", new Vector3(0f, 0f, 0.008f), new Vector3(0.52f, 0.2f, 0.016f), a.MetalDark);
+            for (int i = 0; i < 8; i++)
+            {
+                float x = (i - 3.5f) * 0.056f;
+                Box(t, $"Port{i}", new Vector3(x, -0.04f, 0.017f), new Vector3(0.034f, 0.05f, 0.006f), a.Plastic, collider: false);
+            }
+
+            // A rack already carries twelve blade LEDs, and at aisle distance one more small lamp
+            // among them is invisible — the player ends up reading twenty rack faces one at a time.
+            // So the panel wears a full-width status bar rather than pinpricks.
+            var lamps = new Renderer[4];
+            lamps[0] = Box(t, "StatusBar", new Vector3(0f, 0.06f, 0.018f), new Vector3(0.46f, 0.03f, 0.005f),
+                a.LedAmber, collider: false).GetComponent<Renderer>();
+            for (int i = 1; i < lamps.Length; i++)
+            {
+                lamps[i] = Box(t, $"PortLed{i}", new Vector3((i - 2) * 0.14f, -0.008f, 0.018f),
+                    new Vector3(0.05f, 0.022f, 0.005f), a.LedAmber, collider: false).GetComponent<Renderer>();
+            }
+
+            // ...and its own light, so the one live rack glows down the aisle. Unshadowed, and only
+            // ever one of these is switched on at a time.
+            var lampGo = new GameObject("PanelGlow");
+            lampGo.transform.SetParent(t, false);
+            lampGo.transform.localPosition = new Vector3(0f, 0.05f, 0.35f);
+            lampGo.layer = Layers.PlayerIndex;
+            lamp = lampGo.AddComponent<Light>();
+            lamp.type = LightType.Point;
+            lamp.range = 3.4f;
+            lamp.intensity = 1.1f;
+            lamp.color = new Color(1f, 0.62f, 0.18f);
+            lamp.shadows = LightShadows.None;
+
+            leds = lamps;
+            Layers.SetRecursively(root, Layers.EnvironmentIndex);
+            return root;
+        }
+
+        /// <summary>
+        /// A coiled patch cable, left on a shelf or a desktop.
+        ///
+        /// Deliberately louder than it is realistic. Three of these hide among the clutter of an
+        /// eleven-room floor, and a flat 26 cm disc on a desk covered in paper and mugs is invisible
+        /// from the doorway — the player ends up sweeping every surface in the building rather than
+        /// exploring it. So the coil stands a tagged loop up out of the pile to give it a silhouette
+        /// above desk height, and carries its own small unshadowed light: whatever room it is in
+        /// reads as "something is in here" from the door.
+        /// </summary>
+        public static GameObject CableCoil(Transform parent, GameAssets a, System.Random rng)
+        {
+            var root = new GameObject("CableCoil");
+            root.transform.SetParent(parent, false);
+            Transform t = root.transform;
+
+            Cyl(t, "Coil", new Vector3(0f, 0.03f, 0f), 0.15f, 0.03f, a.CableBlue, collider: false);
+            Cyl(t, "Hub", new Vector3(0f, 0.032f, 0f), 0.06f, 0.033f, a.MetalDark, collider: false);
+
+            // The silhouette: a loop of cable standing proud of whatever it is lying on, so it
+            // breaks the horizontal line of a desktop or a shelf.
+            Box(t, "LoopL", new Vector3(-0.06f, 0.19f, 0f), new Vector3(0.025f, 0.32f, 0.025f), a.CableBlue, collider: false)
+                .transform.localRotation = Quaternion.Euler(0f, 0f, 9f);
+            Box(t, "LoopR", new Vector3(0.06f, 0.19f, 0f), new Vector3(0.025f, 0.32f, 0.025f), a.CableBlue, collider: false)
+                .transform.localRotation = Quaternion.Euler(0f, 0f, -9f);
+            Box(t, "LoopTop", new Vector3(0f, 0.35f, 0f), new Vector3(0.15f, 0.025f, 0.025f), a.CableBlue, collider: false);
+            Box(t, "Tag", new Vector3(0f, 0.26f, 0.012f), new Vector3(0.09f, 0.05f, 0.004f), a.LedAmber, collider: false);
+            Box(t, "Plug", new Vector3(0.15f, 0.04f, 0.06f), new Vector3(0.035f, 0.03f, 0.06f), a.MetalGrey, collider: false)
+                .transform.localRotation = Quaternion.Euler(0f, Rand(rng, -25f, 25f), 0f);
+
+            // Unshadowed and short-ranged: only three are ever switched on at once, and the building
+            // already runs close to its shadow atlas.
+            var glowGo = new GameObject("Glow");
+            glowGo.transform.SetParent(t, false);
+            // Well clear of the coil's own geometry. Sitting just above the loop, it lit the cable
+            // at point-blank range and the whole thing bloomed to a white blob — findable, but it
+            // read as a desk lamp rather than a blue coil of cable.
+            glowGo.transform.localPosition = new Vector3(0f, 0.95f, 0f);
+            glowGo.layer = Layers.PlayerIndex;
+            Light glow = glowGo.AddComponent<Light>();
+            glow.type = LightType.Point;
+            // Enough to say "something is in here" from the doorway, not enough to blow the coil
+            // out to white: it sits close to its own light, and bloom is already on the profile.
+            glow.range = 3.0f;
+            glow.intensity = 0.7f;
+            glow.color = new Color(0.35f, 0.6f, 1f);
+            glow.shadows = LightShadows.None;
+
+            // One box on the root rather than a capsule per cylinder: a scaled capsule collider does
+            // not match a flattened cylinder, and the whole thing needs to stay small — Environment
+            // is also the mask bullets and zombie line-of-sight use.
+            var box = root.AddComponent<BoxCollider>();
+            box.center = new Vector3(0f, 0.16f, 0.01f);
+            box.size = new Vector3(0.30f, 0.34f, 0.30f);
+
+            Layers.SetRecursively(root, Layers.EnvironmentIndex);
+            return root;
+        }
+
+        /// <summary>
+        /// The printed face laid over the lobby whiteboard: the hint, drawn as real letters by
+        /// <see cref="TextureFactory.WhiteboardHint"/>.
+        ///
+        /// Uses <see cref="MeshLibrary.Card"/> rather than a thin box. Unity's primitive cube does
+        /// not give its faces a consistent UV handedness, so a box here renders the hint mirrored or
+        /// upside down depending on which face ends up pointing into the room, and correcting it by
+        /// rotating the plate is guesswork. The card owns its four UVs and faces +Z, which is the
+        /// direction a wall-mounted whiteboard already faces, so it reads the right way round by
+        /// construction.
+        /// </summary>
+        public static GameObject WhiteboardFace(Transform parent, GameAssets a)
+        {
+            var root = new GameObject("HintFace");
+            root.transform.SetParent(parent, false);
+            root.AddComponent<MeshFilter>().sharedMesh = MeshLibrary.Card(1.7f, 1.0f);
+            root.AddComponent<MeshRenderer>().sharedMaterial = a.WhiteboardHint;
+            Layers.SetRecursively(root, Layers.EnvironmentIndex);
+            return root;
+        }
+
+        // ------------------------------------------------------------------ helpers
+
+        /// <summary>A named, empty transform: somewhere for a later pass to hang a rig.</summary>
+        private static GameObject Empty(Transform parent, string name, Vector3 localPos)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            return go;
+        }
 
         private static GameObject Box(Transform parent, string name, Vector3 localPos, Vector3 size, Material material, bool collider = true)
             => PrefabFactory.Primitive(PrimitiveType.Cube, name, parent, localPos, size, material, collider);

@@ -43,5 +43,10 @@ namespace Vent.Core.Audio
         CarDoor,
         CarImpact,
         Roadkill,
+        CablePickup,
+        PanelDenied,
+        PowerRestore,
+        DrawerOpen,
+        KeyPickup,
     }
 }

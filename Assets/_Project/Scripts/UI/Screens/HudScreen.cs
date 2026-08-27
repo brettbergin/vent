@@ -32,6 +32,8 @@ namespace Vent.UI.Screens
         private StringEventChannel announcement;
         [SerializeField, Tooltip("km/h while driving; negative hides the speedometer.")]
         private FloatEventChannel vehicleSpeed;
+        [SerializeField, Tooltip("The key hunt's current step; empty hides the line.")]
+        private StringEventChannel objective;
 
         [Header("Tuning")]
         [SerializeField, Min(0f)] private float crosshairPixelsPerDegree = 22f;
@@ -39,7 +41,7 @@ namespace Vent.UI.Screens
 
         private readonly HudViewModel model = new();
 
-        private VisualElement ammo, hitmarker, banner, toast, promptElement, speedo;
+        private VisualElement ammo, hitmarker, banner, toast, promptElement, objectiveElement, speedo;
         private VisualElement[] slots;
 
         private float vignetteFlash;
@@ -59,8 +61,10 @@ namespace Vent.UI.Screens
 
         public void Configure(HealthEventChannel health, WeaponHudEventChannel weapon, WeaponLevelUpEventChannel weaponLevel,
             BoolEventChannel hit, LevelEventChannel level, IntEventChannel kills, PerkEventChannel perks,
-            StringEventChannel promptChannel = null, StringEventChannel announcementChannel = null, FloatEventChannel speedChannel = null)
+            StringEventChannel promptChannel = null, StringEventChannel announcementChannel = null, FloatEventChannel speedChannel = null,
+            StringEventChannel objectiveChannel = null)
         {
+            objective = objectiveChannel;
             prompt = promptChannel;
             announcement = announcementChannel;
             vehicleSpeed = speedChannel;
@@ -86,6 +90,7 @@ namespace Vent.UI.Screens
             prompt?.Subscribe(OnPrompt);
             announcement?.Subscribe(OnAnnouncement);
             vehicleSpeed?.Subscribe(OnVehicleSpeed);
+            objective?.Subscribe(OnObjective);
         }
 
         protected override void OnDisable()
@@ -100,6 +105,7 @@ namespace Vent.UI.Screens
             prompt?.Unsubscribe(OnPrompt);
             announcement?.Unsubscribe(OnAnnouncement);
             vehicleSpeed?.Unsubscribe(OnVehicleSpeed);
+            objective?.Unsubscribe(OnObjective);
             base.OnDisable();
         }
 
@@ -112,6 +118,7 @@ namespace Vent.UI.Screens
             banner = r.Q<VisualElement>("banner");
             toast = r.Q<VisualElement>("toast");
             promptElement = r.Q<VisualElement>("prompt");
+            objectiveElement = r.Q<VisualElement>("objective");
             speedo = r.Q<VisualElement>("speedo");
             slots = new[] { r.Q<VisualElement>("slot-0"), r.Q<VisualElement>("slot-1") };
         }
@@ -238,6 +245,17 @@ namespace Vent.UI.Screens
             EnsureBound();
             model.PromptText = text ?? string.Empty;
             promptElement?.EnableInClassList("prompt--visible", !string.IsNullOrEmpty(text));
+        }
+
+        /// <summary>
+        /// The key hunt's standing objective. Unlike the prompt it is not about what the player is
+        /// looking at, and unlike the banner it does not time out: it sits there until the step changes.
+        /// </summary>
+        private void OnObjective(string text)
+        {
+            EnsureBound();
+            model.ObjectiveText = text ?? string.Empty;
+            objectiveElement?.EnableInClassList("objective--visible", !string.IsNullOrEmpty(text));
         }
 
         /// <summary>"TITLE\nSUBTITLE" from anywhere in the world (the front door unlocking).</summary>

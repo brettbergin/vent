@@ -58,6 +58,8 @@ namespace Vent.Editor
             a.QuitRequested = Event<VoidEventChannel>("Evt_QuitRequested", "UI → GameManager: quit the application.");
             a.Prompt = Event<StringEventChannel>("Evt_Prompt", "HUD interaction prompt (\"[E] OPEN DOOR\"); an empty string hides it. Raised by PlayerInteractor and the vehicle driver.");
             a.Announcement = Event<StringEventChannel>("Evt_Announcement", "Centre-screen banner: \"TITLE\\nSUBTITLE\". Raised by world events such as the front door unlocking.");
+            a.Objective = Event<StringEventChannel>("Evt_Objective", "The key hunt's current step, shown as a standing line on the HUD; an empty string hides it.");
+            a.KeyFound = Event<VoidEventChannel>("Evt_KeyFound", "The front door key was taken from a desk drawer. The front door listens so it knows the player is carrying one.");
             a.VehicleSpeed = Event<FloatEventChannel>("Evt_VehicleSpeed", "Driven car speed in km/h while the player drives; -1 when they get out.");
 
             // ---- Runtime sets ----------------------------------------------------------
@@ -168,6 +170,11 @@ namespace Vent.Editor
             a.BookC = Lit("M_BookC", new Color(0.22f, 0.40f, 0.22f), smoothness: 0.3f);
             a.LedGreen = Lit("M_LedGreen", new Color(0.2f, 0.9f, 0.3f), smoothness: 0.5f, emission: new Color(0.2f, 1f, 0.3f) * 2.5f);
             a.LedAmber = Lit("M_LedAmber", new Color(0.9f, 0.6f, 0.1f), smoothness: 0.5f, emission: new Color(1f, 0.6f, 0.1f) * 2.5f);
+            // Key hunt. Not emissive: the coil carries its own small light, and making the jacket
+            // glow as well washed it out to a white blob that read as a desk lamp rather than as a
+            // blue coil of cable. The light does the "findable" job; this just has to look like cable.
+            a.CableBlue = Lit("M_CableBlue", new Color(0.10f, 0.35f, 0.75f), smoothness: 0.4f);
+            a.WhiteboardHint = LitImage("M_WhiteboardHint", TextureFactory.WhiteboardHint(), smoothness: 0.5f);
             // Windows & exterior
             // Grime under vents and on ceiling tiles: dark, translucent, matte.
             a.Stain = LitTransparent("M_Stain", new Color(0.10f, 0.08f, 0.06f, 0.32f), smoothness: 0.02f);
@@ -370,6 +377,28 @@ namespace Vent.Editor
         }
 
         /// <summary>Lit, alpha-blended: window glass.</summary>
+        /// <summary>
+        /// A lit material whose albedo is one image mapped 1:1 across the face — no world-scale
+        /// tiling and no normal map, unlike <see cref="Lit"/>'s <c>TextureSet</c>. For the
+        /// whiteboard, where the texture is a picture rather than a surface.
+        /// </summary>
+        private static Material LitImage(string name, Texture2D albedo, float smoothness)
+        {
+            Material m = GetOrCreateMaterial(name, "Universal Render Pipeline/Lit");
+            m.SetColor("_BaseColor", Color.white);
+            m.SetFloat("_Smoothness", smoothness);
+            m.SetFloat("_Metallic", 0f);
+            m.SetTexture("_BaseMap", albedo);
+            m.SetTextureScale("_BaseMap", Vector2.one);
+            m.SetTextureOffset("_BaseMap", Vector2.zero);
+            m.SetTexture("_BumpMap", null);
+            m.DisableKeyword("_NORMALMAP");
+            m.DisableKeyword("_EMISSION");
+            m.SetColor("_EmissionColor", Color.black);
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
         private static Material LitTransparent(string name, Color color, float smoothness)
         {
             Material m = GetOrCreateMaterial(name, "Universal Render Pipeline/Lit");

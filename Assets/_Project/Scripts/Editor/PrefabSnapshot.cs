@@ -5,6 +5,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
+using Vent.Gameplay.World;
 
 namespace Vent.Editor
 {
@@ -199,6 +200,96 @@ namespace Vent.Editor
             Object.DestroyImmediate(rt);
             Object.DestroyImmediate(camGo);
             Debug.Log($"[Vent] Nature snapshots written: {shots.Count} to Logs/snapshot-Nature_*.png");
+        }
+
+        /// <summary>
+        /// Photographs the key hunt: the hint on the lobby whiteboard (the one thing no headless
+        /// test can check — generated letters have to be legible and the right way round), a cable
+        /// coil, a rack's patch panel, and a desk with its monitor lit and its drawer pulled out.
+        /// </summary>
+        [MenuItem("Vent/Snapshot Key Hunt")]
+        public static void SnapshotKeyHunt()
+        {
+            EditorSceneManager.OpenScene(Paths.BuildingScene, OpenSceneMode.Single);
+            var hunt = Object.FindFirstObjectByType<KeyHuntDirector>();
+            if (hunt == null)
+            {
+                Debug.LogError("[Vent] Building scene has no KeyHuntDirector; regenerate first.");
+                return;
+            }
+
+            var camGo = new GameObject("SnapshotCamera");
+            var cam = camGo.AddComponent<Camera>();
+            cam.fieldOfView = 55f;
+            cam.GetUniversalAdditionalCameraData().renderPostProcessing = true;
+            cam.nearClipPlane = 0.03f;
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = Color.black;
+            Directory.CreateDirectory("Logs");
+            const int w = 1200, h = 800;
+            var rt = new RenderTexture(w, h, 24);
+            var tex = new Texture2D(w, h, TextureFormat.RGB24, false);
+
+            void Shoot(string name, Transform target, Vector3 lookAt, float back, float up)
+            {
+                if (target == null)
+                {
+                    Debug.LogWarning($"[Vent] Nothing to photograph for {name}");
+                    return;
+                }
+
+                cam.transform.position = lookAt + target.forward * back + Vector3.up * up;
+                cam.transform.LookAt(lookAt);
+                cam.targetTexture = rt;
+                cam.Render();
+                RenderTexture.active = rt;
+                tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+                tex.Apply();
+                RenderTexture.active = null;
+                cam.targetTexture = null;
+                File.WriteAllBytes(Path.Combine("Logs", $"snapshot-keyhunt-{name}.png"), tex.EncodeToPNG());
+            }
+
+            // Straight on and close, so the hint is read exactly as a player standing at it sees it.
+            Transform note = hunt.Note != null ? hunt.Note.transform : null;
+            if (note != null)
+            {
+                Shoot("hint", note, note.position + note.up * 1.5f, 1.9f, 0f);
+            }
+
+            // Show the roll: the panel this run chose, the first coil, and the key desk lit and open.
+            hunt.SeedOverride = 4242;
+            hunt.BeginRun();
+            if (hunt.ActivePanel != null)
+            {
+                Transform panel = hunt.ActivePanel.transform;
+                Shoot("panel", panel, panel.position, 1.0f, 0.15f);
+            }
+
+            if (hunt.ActiveCables.Count > 0)
+            {
+                Transform coil = hunt.ActiveCables[0].transform;
+                Shoot("cable", coil, coil.position, 0.9f, 0.5f);
+            }
+
+            if (hunt.KeyDrawer != null)
+            {
+                // Light the screen and pull the drawer out by hand: BeginRun leaves both off, and
+                // nothing is running an Update loop in the editor to animate them.
+                hunt.KeyDrawer.SetScreenLit(true);
+                hunt.KeyDrawer.transform.localPosition += Vector3.forward * 0.3f;
+                // A desk's monitor faces its chair, which sits on the desk's -Z side, so the
+                // camera has to stand behind the chair; from +Z you photograph the monitor's back
+                // and the screen reads black whether it is lit or not.
+                Transform desk = hunt.KeyDrawer.transform.parent.parent;
+                Shoot("keydesk", desk, desk.position + Vector3.up * 0.9f, -2.4f, 0.9f);
+            }
+
+            Object.DestroyImmediate(tex);
+            Object.DestroyImmediate(rt);
+            Object.DestroyImmediate(camGo);
+            Debug.Log("[Vent] Key hunt snapshots written to Logs/snapshot-keyhunt-*.png");
+            EditorSceneManager.OpenScene(Paths.BootScene, OpenSceneMode.Single);
         }
 
         [MenuItem("Vent/Snapshot Rooms")]

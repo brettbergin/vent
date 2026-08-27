@@ -69,6 +69,12 @@
 .toast__text { font-size: 22px; letter-spacing: 3px; color: var(--xp); -unity-font-style: bold; }
 .toast--visible { opacity: 1; }
 
+/* Key hunt objective: a standing line on the left, clear of the health block and the level counter.
+   Unlike the prompt it is not about what is in reach, and unlike the banner it does not time out. */
+.objective { position: absolute; left: 32px; top: 42%; opacity: 0; transition-property: opacity; transition-duration: 0.25s; }
+.objective__text { font-size: 15px; letter-spacing: 2px; color: var(--accent); -unity-font-style: bold; background-color: rgba(0, 0, 0, 0.35); padding: 5px 10px; border-radius: 3px; }
+.objective--visible { opacity: 1; }
+
 /* Interaction prompt: "[E]  OPEN DOOR" just under the crosshair while something usable is in reach. */
 .prompt { position: absolute; top: 58%; left: 0; right: 0; align-items: center; opacity: 0; transition-property: opacity; transition-duration: 0.15s; }
 .prompt__text { font-size: 18px; letter-spacing: 3px; color: var(--fg); background-color: rgba(0, 0, 0, 0.45); padding: 6px 14px; border-radius: 4px; }

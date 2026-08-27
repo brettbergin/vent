@@ -150,6 +150,24 @@ namespace Vent.Core.Audio
                 case SoundId.Roadkill:
                     // A body against a bumper: a wet thud and a cut-off growl.
                     return Mix(Lowpass(NoiseBurst(rng, 0.12f, 30f), 700f, 0.9f), Tone(0.18f, 120f, 50f, 20f, 0.7f), Growl(rng, 0.3f, 150f, 90f, 0.4f));
+                case SoundId.CablePickup:
+                    // A coil lifted off a shelf: nylon rustle with the connector clicking home.
+                    return Mix(Highpass(NoiseBurst(rng, 0.07f, 65f), 2200f, 0.5f), Tone(0.05f, 900f, 620f, 70f, 0.25f));
+                case SoundId.PanelDenied:
+                    // A dead port: two flat clicks going nowhere.
+                    return Mix(Arpeggio(new[] { 330f, 262f }, 0.05f, 0.22f), Lowpass(NoiseBurst(rng, 0.03f, 150f), 1600f, 0.35f));
+                case SoundId.PowerRestore:
+                    // Relays clunk, twelve racks spin their fans up, and the floor answers with a chime.
+                    return Mix(Lowpass(NoiseBurst(rng, 0.12f, 55f), 900f, 0.8f), Tone(1.3f, 55f, 190f, 1.2f, 0.5f),
+                        Lowpass(NoiseBurst(rng, 1.5f, 2.2f, 0.28f), 1400f), Arpeggio(new[] { 523.25f, 659.25f, 783.99f }, 0.12f, 0.28f));
+                case SoundId.DrawerOpen:
+                    // A pedestal drawer on steel runners, ending against its stop.
+                    return Mix(Lowpass(NoiseBurst(rng, 0.35f, 11f, 0.4f), 1600f), Tone(0.3f, 220f, 155f, 8f, 0.2f),
+                        Lowpass(NoiseBurst(rng, 0.05f, 95f), 1200f, 0.4f));
+                case SoundId.KeyPickup:
+                    // Small brass: two bright partials and a scrape.
+                    return Mix(Tone(0.12f, 2600f, 2600f, 40f, 0.25f), Tone(0.15f, 3400f, 3400f, 30f, 0.16f),
+                        Highpass(NoiseBurst(rng, 0.05f, 120f), 4000f, 0.35f));
                 default:
                     return new float[SampleRate / 10];
             }

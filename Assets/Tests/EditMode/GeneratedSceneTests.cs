@@ -8,6 +8,7 @@ using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
 using Vent.Core.Utility;
+using Vent.Gameplay.World;
 
 namespace Vent.Tests.EditMode
 {
@@ -176,6 +177,65 @@ namespace Vent.Tests.EditMode
                 foreach (Renderer block in blocks)
                 {
                     Assert.IsFalse(footprint.Intersects(block.bounds), $"{block.name} stands inside the building or on its pavement");
+                }
+            }
+            finally
+            {
+                EditorSceneManager.OpenScene($"{Vent.Editor.Paths.Scenes}/{SceneNames.Boot}.unity", OpenSceneMode.Single);
+            }
+        }
+
+        [Test]
+        public void BuildingHasAKeyHuntAndNoneOfItIsStatic()
+        {
+            string path = Vent.Editor.Paths.BuildingScene;
+            Assert.IsTrue(System.IO.File.Exists(path), $"Building scene missing at {path}; run Vent/Rebuild Everything.");
+
+            Scene scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
+            try
+            {
+                var directors = new List<KeyHuntDirector>();
+                var notes = new List<QuestNote>();
+                var drawers = new List<DeskDrawer>();
+                var panels = new List<PatchPanel>();
+                var cables = new List<PatchCablePickup>();
+                bool serverRoom = false;
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    directors.AddRange(root.GetComponentsInChildren<KeyHuntDirector>(includeInactive: true));
+                    notes.AddRange(root.GetComponentsInChildren<QuestNote>(includeInactive: true));
+                    drawers.AddRange(root.GetComponentsInChildren<DeskDrawer>(includeInactive: true));
+                    panels.AddRange(root.GetComponentsInChildren<PatchPanel>(includeInactive: true));
+                    cables.AddRange(root.GetComponentsInChildren<PatchCablePickup>(includeInactive: true));
+                    foreach (Transform t in root.GetComponentsInChildren<Transform>(includeInactive: true))
+                    {
+                        serverRoom |= t.name.StartsWith("Room_") && t.name.EndsWith("ServerRoom");
+                    }
+                }
+
+                Assert.AreEqual(1, directors.Count, "one key hunt director");
+                Assert.AreEqual(1, notes.Count, "exactly one whiteboard carries the hint");
+                Assert.IsTrue(serverRoom, "the room plan guarantees somewhere to patch the servers");
+                Assert.GreaterOrEqual(drawers.Count, 8, "enough desks that finding the right one is a search");
+                Assert.GreaterOrEqual(panels.Count, 4, "a patch panel on every rack");
+                Assert.GreaterOrEqual(cables.Count, 6, "more candidate cable spots than a run will use");
+
+                // The regression guard that matters. A BatchingStatic renderer is welded into a
+                // combined mesh and does not move, so a drawer that picked up static flags would
+                // still open in code and never budge on screen; anything marked ContributeGI here
+                // would also be baked into a lightmap it then slides out of.
+                var movers = new List<Component>();
+                movers.AddRange(drawers);
+                movers.AddRange(panels);
+                movers.AddRange(cables);
+                foreach (Component mover in movers)
+                {
+                    Assert.AreEqual((StaticEditorFlags)0, GameObjectUtility.GetStaticEditorFlags(mover.gameObject),
+                        $"{mover.GetType().Name} on {mover.name} must stay non-static; build it after Generate() returns");
+                    Assert.IsNotNull(mover.GetComponentInChildren<Collider>(true),
+                        $"{mover.GetType().Name} on {mover.name} needs a collider or the interactor's ray cannot find it");
+                    Assert.AreEqual(Layers.EnvironmentIndex, mover.gameObject.layer,
+                        $"{mover.name} must be on Environment: that is what Layers.InteractMask looks at");
                 }
             }
             finally

@@ -212,6 +212,83 @@ namespace Vent.Editor
         // ------------------------------------------------------------------ sprites (RGBA, clamped)
 
         /// <summary>Muzzle flash: a white-hot core, an orange corona and eight ragged spikes.</summary>
+        /// <summary>
+        /// The lobby whiteboard's face: the hint the whole key hunt hangs off, drawn with
+        /// <see cref="GlyphFont"/> so the player reads it off the wall rather than through a menu.
+        /// Non-square (1024x640) because the board is 1.8 x 1.1 m and Unity's cube gives each face
+        /// 0..1 UVs — a square texture here would squash every letter by about a third.
+        /// </summary>
+        public static Texture2D WhiteboardHint()
+        {
+            const int W = 1024, H = 640;
+            var noise = new Noise("WhiteboardHint".GetHashCode());
+            var px = new Color[W * H];
+
+            // The board itself: cool off-white, with the vertical smear a dry cloth leaves behind
+            // and a ghost of whatever was written here last.
+            for (int y = 0; y < H; y++)
+            {
+                for (int x = 0; x < W; x++)
+                {
+                    float u = x / (float)W, v = y / (float)H;
+                    float wipe = noise.Value(u, v, 24, 3) * 0.06f;
+                    float ghost = Mathf.Max(0f, noise.Value(u, v, 9, 7) - 0.72f) * 0.5f;
+                    float shade = 0.93f - wipe - ghost;
+                    px[y * W + x] = new Color(shade * 0.99f, shade, shade * 1.01f);
+                }
+            }
+
+            var ink = new Color(0.09f, 0.11f, 0.16f);
+            var accent = new Color(0.65f, 0.12f, 0.14f);
+            var blue = new Color(0.13f, 0.26f, 0.55f);
+
+            const int Scale = 5;
+            const int Left = 120;
+            int line = 130;
+            int Step(int rows) => GlyphFont.GlyphHeight * Scale + rows;
+
+            GlyphFont.Draw(px, W, H, "SERVERS ARE DOWN", Left, line, Scale, ink);
+            Rule(px, W, H, Left, line + GlyphFont.GlyphHeight * Scale + 8, GlyphFont.Width("SERVERS ARE DOWN") * Scale, 4, ink);
+            line += Step(46);
+
+            GlyphFont.Draw(px, W, H, "FIND 3 PATCH CABLES", Left, line, Scale, blue);
+            line += Step(16);
+            GlyphFont.Draw(px, W, H, "PLUG THEM IN AT THE RACK", Left, line, Scale, blue);
+            line += Step(16);
+            GlyphFont.Draw(px, W, H, "IN THE SERVER ROOM", Left, line, Scale, blue);
+            line += Step(46);
+
+            GlyphFont.Draw(px, W, H, "> ONE MONITOR COMES BACK", Left, line, Scale, ink);
+            line += Step(16);
+            GlyphFont.Draw(px, W, H, "> THE KEY IS IN ITS DRAWER", Left, line, Scale, accent);
+            Rule(px, W, H, Left, line + GlyphFont.GlyphHeight * Scale + 8, GlyphFont.Width("> THE KEY IS IN ITS DRAWER") * Scale, 3, accent);
+
+            return WriteImage("T_WhiteboardHint", px, W, isNormal: false, hasAlpha: false, clamp: true, height: H);
+        }
+
+        /// <summary>A marker rule under a line of text.</summary>
+        private static void Rule(Color[] px, int width, int height, int left, int top, int length, int thickness, Color ink)
+        {
+            for (int dy = 0; dy < thickness; dy++)
+            {
+                int y = top + dy;
+                if (y < 0 || y >= height)
+                {
+                    continue;
+                }
+
+                int rowStart = (height - 1 - y) * width;
+                for (int dx = 0; dx < length; dx++)
+                {
+                    int x = left + dx;
+                    if (x >= 0 && x < width)
+                    {
+                        px[rowStart + x] = ink;
+                    }
+                }
+            }
+        }
+
         public static Texture2D MuzzleFlashSprite() => Sprite("MuzzleFlash", 256, (x, y, n) =>
         {
             float dx = x - 0.5f, dy = y - 0.5f;
@@ -336,10 +413,12 @@ namespace Vent.Editor
         /// mip's alpha so the same fraction of texels survives the alpha test at any distance, which is what
         /// keeps a tree's canopy from thinning to twigs a hundred metres away.
         /// </summary>
-        public static Texture2D WriteImage(string name, Color[] pixels, int size, bool isNormal, bool hasAlpha, bool clamp, float coverageCutoff = -1f)
+        /// <param name="height">Rows, when the image is not square (the whiteboard's face is 1.8 x 1.1 m); -1 means square.</param>
+        public static Texture2D WriteImage(string name, Color[] pixels, int size, bool isNormal, bool hasAlpha, bool clamp, float coverageCutoff = -1f, int height = -1)
         {
+            int rows = height > 0 ? height : size;
             string path = $"{Paths.Textures}/{name}.png";
-            var tex = new Texture2D(size, size, hasAlpha ? TextureFormat.RGBA32 : TextureFormat.RGB24, false, linear: isNormal);
+            var tex = new Texture2D(size, rows, hasAlpha ? TextureFormat.RGBA32 : TextureFormat.RGB24, false, linear: isNormal);
             tex.SetPixels(pixels);
             tex.Apply();
             byte[] png = tex.EncodeToPNG();
@@ -366,7 +445,7 @@ namespace Vent.Editor
             if (importer.alphaIsTransparency != hasAlpha) { importer.alphaIsTransparency = hasAlpha; dirty = true; }
             if (importer.mipMapsPreserveCoverage != coverage) { importer.mipMapsPreserveCoverage = coverage; dirty = true; }
             if (coverage && Mathf.Abs(importer.alphaTestReferenceValue - coverageCutoff) > 0.001f) { importer.alphaTestReferenceValue = coverageCutoff; dirty = true; }
-            if (importer.maxTextureSize < size) { importer.maxTextureSize = size; dirty = true; }
+            if (importer.maxTextureSize < Mathf.Max(size, rows)) { importer.maxTextureSize = Mathf.Max(size, rows); dirty = true; }
             if (dirty)
             {
                 importer.SaveAndReimport();

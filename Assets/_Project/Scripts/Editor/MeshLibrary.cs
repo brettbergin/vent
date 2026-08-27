@@ -14,6 +14,53 @@ namespace Vent.Editor
     {
         private static readonly Dictionary<string, Mesh> Cache = new();
 
+        /// <summary>
+        /// A flat rectangle facing +Z with the UVs written out explicitly: (0,0) at the bottom-left
+        /// as seen from the front, U to the right, V up.
+        ///
+        /// For anything that has to display a picture the right way round — the whiteboard's hint.
+        /// A thin cube would do the job geometrically, but Unity's primitive cube does not give its
+        /// six faces a consistent UV handedness, so a texture with words on it comes out mirrored or
+        /// upside down depending on which face you happen to be looking at, and the fix degenerates
+        /// into guessing at rotations. Owning the four vertices removes the question.
+        /// </summary>
+        public static Mesh Card(float width, float height)
+        {
+            string key = $"Card_{width:0.###}x{height:0.###}";
+            if (Cache.TryGetValue(key, out Mesh cached) && cached != null)
+            {
+                return cached;
+            }
+
+            string path = $"{Paths.Meshes}/{key}.asset";
+            var mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+            if (mesh == null)
+            {
+                // Seen from +Z looking back along -Z, Unity's left-handed axes put +X on the
+                // viewer's LEFT, and a front face is the one whose vertices run clockwise from
+                // there. Both facts are easy to get backwards, so the corners are named for where
+                // they land on the viewer's screen rather than for their sign in X.
+                float w = width / 2f, h = height / 2f;
+                Vector3 bottomLeft = new(w, -h, 0f), topLeft = new(w, h, 0f);
+                Vector3 topRight = new(-w, h, 0f), bottomRight = new(-w, -h, 0f);
+                mesh = new Mesh
+                {
+                    name = key,
+                    vertices = new[] { bottomLeft, topLeft, topRight, bottomRight },
+                    uv = new[] { new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(1f, 0f) },
+                    normals = new[] { Vector3.forward, Vector3.forward, Vector3.forward, Vector3.forward },
+                    triangles = new[] { 0, 1, 2, 0, 2, 3 },
+                };
+                mesh.RecalculateTangents();
+                mesh.RecalculateBounds();
+                ProjectBootstrap.EnsureFolder(Paths.Meshes);
+                AssetDatabase.CreateAsset(mesh, path);
+            }
+
+            Cache[key] = mesh;
+            return mesh;
+        }
+
         public static Mesh WorldCube(Vector3 size)
         {
             string key = $"Cube_{size.x:0.###}x{size.y:0.###}x{size.z:0.###}";

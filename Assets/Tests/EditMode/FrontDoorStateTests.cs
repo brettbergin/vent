@@ -52,5 +52,38 @@ namespace Vent.Tests.EditMode
             Assert.AreEqual(DoorAction.Locked, door.TryOpen());
             Assert.IsTrue(door.OnLevel(4), "and it can unlock again next run");
         }
+
+        [Test]
+        public void TheOfficeKeyUnlocksAtAnyLevel()
+        {
+            var door = new FrontDoorState(4);
+            door.OnLevel(2);
+            Assert.IsFalse(door.IsUnlocked);
+            Assert.IsTrue(door.UseKey(), "turning the key is reported exactly once");
+            Assert.IsFalse(door.UseKey());
+            Assert.IsTrue(door.IsUnlocked);
+            Assert.IsFalse(door.LevelUnlocked, "the level never got there; the key did");
+            Assert.AreEqual(DoorAction.Opened, door.TryOpen());
+        }
+
+        [Test]
+        public void ReachingTheThresholdAfterTheKeyIsNotASecondUnlock()
+        {
+            var door = new FrontDoorState(4);
+            door.UseKey();
+            Assert.IsFalse(door.OnLevel(4), "the door is already open; do not celebrate twice");
+        }
+
+        [Test]
+        public void ANewRunTakesTheKeyBack()
+        {
+            var door = new FrontDoorState(4);
+            door.UseKey();
+            door.TryOpen();
+            Assert.IsFalse(door.OnLevel(1));
+            Assert.IsFalse(door.KeyUsed);
+            Assert.IsFalse(door.IsUnlocked);
+            Assert.AreEqual(DoorAction.Locked, door.TryOpen());
+        }
     }
 }

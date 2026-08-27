@@ -33,6 +33,7 @@ namespace Vent.UI.Screens
         private string toastText = string.Empty;
         private string perkText = string.Empty;
         private string promptText = string.Empty;
+        private string objectiveText = string.Empty;
         private string speedText = string.Empty;
         private StyleFloat vignetteOpacity = 0f;
         private StyleFloat hitmarkerOpacity = 0f;
@@ -60,6 +61,9 @@ namespace Vent.UI.Screens
 
         /// <summary>"[E]  OPEN DOOR" while looking at something usable; empty otherwise.</summary>
         [CreateProperty] public string PromptText { get => promptText; set => Set(ref promptText, value); }
+
+        /// <summary>The key hunt's current step, standing on screen until it changes; empty when idle.</summary>
+        [CreateProperty] public string ObjectiveText { get => objectiveText; set => Set(ref objectiveText, value); }
 
         /// <summary>Speedometer while driving; empty on foot.</summary>
         [CreateProperty] public string SpeedText { get => speedText; set => Set(ref speedText, value); }

@@ -69,6 +69,19 @@ namespace Vent.Editor
             public readonly List<AirVent> Vents = new();
             public readonly List<Vector3> RoomCenters = new();
             public readonly List<Vector3> WindowCenters = new();
+
+            // ---- Key hunt anchors, collected while the rooms are dressed ----
+            /// <summary>Every office desk, in placement order: the candidates for the key drawer.</summary>
+            public readonly List<Transform> Desks = new();
+
+            /// <summary>Every server rack: the candidates for the patch panel.</summary>
+            public readonly List<Transform> Racks = new();
+
+            /// <summary>Flat surfaces a cable coil can sit on, tagged with the room index they belong to.</summary>
+            public readonly List<(Vector3 position, Quaternion rotation, int room)> CableSpots = new();
+
+            /// <summary>The lobby's whiteboard, which carries the hint. Never null: the lobby dressing forces one.</summary>
+            public Transform LobbyWhiteboard;
         }
 
         // BatchingStatic matters: without the GPU Resident Drawer (see README, "GPU Resident Drawer")
@@ -270,16 +283,30 @@ namespace Vent.Editor
             }
 
             // ---- Furniture: each room gets a purpose and is dressed for it -----------------------
+            // The purposes are planned in one pass before any dressing, because the guarantees the
+            // key hunt depends on (a server room to patch, offices to hide a key in) can only be
+            // checked once every room has rolled.
+            RoomType[] plan = PlanRoomTypes(cols, rows, lobbyR * cols + lobbyC, rng);
             for (int r = 0; r < rows; r++)
             {
                 for (int c = 0; c < cols; c++)
                 {
                     Vector3 center = CellCenter(c, r, cols, rows, cell);
-                    bool isSpawnRoom = c == lobbyC && r == lobbyR;
-                    RoomType type = isSpawnRoom ? RoomType.Lobby : PickRoomType(rng);
+                    RoomType type = plan[r * cols + c];
                     Transform room = Child(props, $"Room_{c}_{r}_{type}");
                     var placer = new RoomDresser(a, rng, room, center, cell, t, doorCenters, ventFloorPoints, spawnCenter);
                     placer.Dress(type);
+                    result.Desks.AddRange(placer.Desks);
+                    result.Racks.AddRange(placer.Racks);
+                    foreach ((Vector3 pos, Quaternion rot) spot in placer.CableSpots)
+                    {
+                        result.CableSpots.Add((spot.pos, spot.rot, r * cols + c));
+                    }
+
+                    if (type == RoomType.Lobby)
+                    {
+                        result.LobbyWhiteboard = placer.Whiteboard;
+                    }
                 }
             }
 
@@ -368,7 +395,8 @@ namespace Vent.Editor
         /// must not be baked into the walkable surface. Layer Environment so bullets and the sealed-
         /// lobby test still hit a closed door.
         /// </summary>
-        public static FrontDoor BuildFrontDoor(GameAssets a, Result building, LevelEventChannel level, StringEventChannel announcement, GameObject exteriorVents)
+        public static FrontDoor BuildFrontDoor(GameAssets a, Result building, LevelEventChannel level, StringEventChannel announcement,
+            VoidEventChannel keyFound, GameObject exteriorVents)
         {
             float width = 2.2f, height = 2.4f, depth = 0.05f;
             float leaf = width / 2f - 0.01f; // hinge-to-meeting-stile; the two meeting stiles all but touch
@@ -399,11 +427,137 @@ namespace Vent.Editor
             obstacle.carveOnlyStationary = false;
 
             var door = rootGo.AddComponent<FrontDoor>();
-            door.Configure(level, announcement, hingeL, hingeR, obstacle, lamp.GetComponent<Renderer>(), exteriorVents);
+            door.Configure(level, announcement, keyFound, hingeL, hingeR, obstacle, lamp.GetComponent<Renderer>(), exteriorVents);
 
             Layers.SetRecursively(rootGo, Layers.EnvironmentIndex);
             root.SetPositionAndRotation(building.FrontDoorPosition, Quaternion.LookRotation(building.FrontDoorOutward));
             return door;
+        }
+
+        // ------------------------------------------------------------------ key hunt
+
+        /// <summary>
+        /// The alternate way out: the hint on the lobby whiteboard, a coil of patch cable on every
+        /// flat surface the rooms happened to get, a patch panel on every rack, and a sliding
+        /// drawer under every desk.
+        ///
+        /// Every candidate is built here and <see cref="KeyHuntDirector"/> picks among them at the
+        /// start of each run, because the building itself is baked from a fixed seed — anything
+        /// decided at regen would hide the key in the same drawer for ever.
+        ///
+        /// Called after <see cref="Generate"/> has returned, exactly like
+        /// <see cref="BuildFrontDoor"/>, and that ordering is load-bearing twice over. The three
+        /// static-flag loops inside Generate never see any of this, so the drawers can actually
+        /// slide (a batching-static renderer is welded into a combined mesh and does not move) and
+        /// nothing here is baked into a lightmap. And the NavMesh bake has already run, so a
+        /// hundred small colliders never carve the walkable surface.
+        /// </summary>
+        public static KeyHuntDirector BuildKeyQuest(GameAssets a, Result building, StringEventChannel objective,
+            StringEventChannel announcement, VoidEventChannel keyFound)
+        {
+            var rootGo = new GameObject("KeyHunt");
+            Transform root = rootGo.transform;
+            root.SetParent(building.Root.transform, false);
+            var rng = new System.Random(4242); // only shapes the coils' cosmetic jitter
+
+            // The director exists first so every piece below can be wired in one go, rather than
+            // configured twice and clobbered on the second pass.
+            var hunt = rootGo.AddComponent<KeyHuntDirector>();
+
+            // ---- The hint, on the lobby whiteboard ----
+            QuestNote note = null;
+            if (building.LobbyWhiteboard != null)
+            {
+                Transform face = building.LobbyWhiteboard.Find("FaceAnchor");
+                if (face != null)
+                {
+                    PropLibrary.WhiteboardFace(face, a);
+                }
+
+                note = building.LobbyWhiteboard.gameObject.AddComponent<QuestNote>();
+                note.Configure(hunt);
+            }
+            else
+            {
+                Debug.LogWarning("[Vent] No lobby whiteboard: the key hunt has no hint to read.");
+            }
+
+            // ---- A sliding drawer and a controllable screen on every desk ----
+            var drawers = new List<DeskDrawer>();
+            foreach (Transform desk in building.Desks)
+            {
+                Transform anchor = desk.Find("DrawerAnchor");
+                Transform screen = desk.Find("Screen");
+                if (anchor == null || screen == null)
+                {
+                    continue;
+                }
+
+                GameObject leaf = PropLibrary.DrawerLeaf(anchor, a);
+                var drawer = leaf.AddComponent<DeskDrawer>();
+
+                // Unshadowed and short-ranged: the building already runs close to the shadow atlas,
+                // and only ever one of these is switched on at a time.
+                var glowGo = new GameObject("ScreenGlow");
+                glowGo.transform.SetParent(screen, false);
+                glowGo.transform.localPosition = new Vector3(0f, 0f, -0.25f);
+                glowGo.layer = Layers.PlayerIndex;
+                Light glow = glowGo.AddComponent<Light>();
+                glow.type = LightType.Point;
+                glow.range = 4f;
+                glow.intensity = 1.6f;
+                glow.color = new Color(0.5f, 0.75f, 1f);
+                glow.shadows = LightShadows.None;
+                glow.enabled = false;
+
+                drawer.Configure(hunt, screen.GetComponent<Renderer>(), glow, leaf.transform.Find("Key")?.gameObject);
+                drawers.Add(drawer);
+            }
+
+            // ---- A patch panel on every rack ----
+            var panels = new List<PatchPanel>();
+            foreach (Transform rack in building.Racks)
+            {
+                Transform anchor = rack.Find("PanelAnchor");
+                if (anchor == null)
+                {
+                    continue;
+                }
+
+                GameObject rig = PropLibrary.PatchPanelRig(anchor, a, out Renderer[] leds, out Light beacon);
+                var panel = rig.AddComponent<PatchPanel>();
+                panel.Configure(hunt, leds, beacon);
+                panels.Add(panel);
+                rig.SetActive(false); // BeginRun shows the one rack it rolls
+            }
+
+            // ---- A cable coil on every surface the dresser noted ----
+            Transform coils = Child(root, "Cables");
+            var cables = new List<PatchCablePickup>();
+            foreach ((Vector3 position, Quaternion rotation, int room) spot in building.CableSpots)
+            {
+                GameObject coil = PropLibrary.CableCoil(coils, a, rng);
+                coil.transform.SetPositionAndRotation(spot.position, spot.rotation);
+                var pickup = coil.AddComponent<PatchCablePickup>();
+                pickup.Configure(hunt, spot.room);
+                cables.Add(pickup);
+                // Off in the saved scene. BeginRun shows the three it rolls; leaving all seventy-odd
+                // on would light the whole building for the frame before the run starts.
+                coil.SetActive(false);
+            }
+
+            hunt.Configure(objective, announcement, keyFound, note, drawers.ToArray(), panels.ToArray(), cables.ToArray(), building.PlayerSpawn);
+
+            Layers.SetRecursively(rootGo, Layers.EnvironmentIndex);
+            // ...which just put the coils' lights on Environment too. Lights follow the room-light
+            // convention (Layers.PlayerIndex) so the weapon-overlay camera sees them as well.
+            foreach (Light coilLight in rootGo.GetComponentsInChildren<Light>(includeInactive: true))
+            {
+                coilLight.gameObject.layer = Layers.PlayerIndex;
+            }
+
+            Debug.Log($"[Vent] Key hunt: {drawers.Count} desks, {panels.Count} racks, {cables.Count} cable spots");
+            return hunt;
         }
 
         /// <summary>One leaf hanging off a hinge: stiles, rails, a glass pane, a push bar, and a single collider for the lot.</summary>
@@ -612,6 +766,19 @@ namespace Vent.Editor
         /// <summary>Clear street between the pavement apron and the nearest far building, metres.</summary>
         public const float ExteriorGap = 6f;
 
+        /// <summary>
+        /// Metres the skyline keeps clear of the district's bounding box. Comfortably more than the
+        /// 10 m margin <c>DistrictSceneTests.SkylineStaysBeyondTheDistrict</c> asserts.
+        /// </summary>
+        public const float ExteriorClearance = 14f;
+
+        /// <summary>Half-extents of a box's axis-aligned footprint after it is turned <paramref name="yaw"/> degrees about Y.</summary>
+        private static Vector3 RotatedFootprint(Vector3 size, float yaw)
+        {
+            float c = Mathf.Abs(Mathf.Cos(yaw * Mathf.Deg2Rad)), s = Mathf.Abs(Mathf.Sin(yaw * Mathf.Deg2Rad));
+            return new Vector3(size.x / 2f * c + size.z / 2f * s, size.y / 2f, size.x / 2f * s + size.z / 2f * c);
+        }
+
         /// <summary>Distance from a rectangle's centre to its edge along <paramref name="dir"/> (XZ).</summary>
         public static float RectangleRadius(Vector3 dir, float halfWidth, float halfDepth)
         {
@@ -648,13 +815,27 @@ namespace Vent.Editor
                 var size = new Vector3((8f + (float)rng.NextDouble() * 14f) * scale, (6f + (float)rng.NextDouble() * 22f) * scale, (8f + (float)rng.NextDouble() * 14f) * scale);
                 // Measured from the clear area's edge in this direction (not its centre), so a bigger
                 // building never ends up with a neighbour standing inside its rooms or its streets.
+                float yaw = (float)rng.NextDouble() * 360f;
                 Vector3 dir = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
                 float edge = RectangleRadius(dir, clear.x, clear.y);
                 float blockRadius = Mathf.Max(size.x, size.z) * 0.71f; // half-diagonal: it is rotated below
                 float dist = edge + blockRadius + ExteriorGap + (float)rng.NextDouble() * 45f;
+
+                // Along a diagonal, clearing the rectangle's edge is not enough to clear its
+                // bounding box — a block sitting just past the corner still overlaps it on both
+                // axes. Since two boxes only intersect when they overlap on *every* axis, push the
+                // block out until its rotated footprint is clear of the district on whichever axis
+                // is cheaper. Without this the skyline's distance from the district is a matter of
+                // luck, and a reshuffled seed quietly drops a tower into the streets.
+                Vector3 footprint = RotatedFootprint(size, yaw);
+                float ax = Mathf.Abs(dir.x), az = Mathf.Abs(dir.z);
+                float needX = ax < 1e-4f ? float.PositiveInfinity : (clear.x + ExteriorClearance + footprint.x) / ax;
+                float needZ = az < 1e-4f ? float.PositiveInfinity : (clear.y + ExteriorClearance + footprint.z) / az;
+                dist = Mathf.Max(dist, Mathf.Min(needX, needZ));
+
                 Vector3 pos = dir * dist;
                 GameObject block = PrefabFactory.Primitive(PrimitiveType.Cube, $"Building{i}", exterior, pos + Vector3.up * (size.y / 2f - 0.2f), size, a.DistantBuilding, collider: false);
-                block.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+                block.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
                 block.GetComponent<Renderer>().renderingLayerMask = exteriorRenderingLayer | 1u;
                 // Lit windows on the far buildings: a few emissive strips.
                 int floors = Mathf.Max(1, (int)(size.y / 3f));
@@ -765,6 +946,112 @@ namespace Vent.Editor
         }
 
         /// <summary>
+        /// What each room is for, and the minimum the building must have of it. The first two are
+        /// what the key hunt needs — somewhere to patch the servers, and desks to hide a key in —
+        /// and the rest are what stops a floor of offices reading like a warehouse of desks.
+        ///
+        /// Eleven non-lobby rooms against seven guaranteed, so there is still plenty left to roll.
+        /// <c>farFromLobby</c> says which end of the building a repair prefers: the server room is
+        /// worth a walk, an office should be near the spawn.
+        /// </summary>
+        private static readonly (RoomType Type, int Minimum, bool FarFromLobby)[] Quotas =
+        {
+            (RoomType.ServerRoom, 1, true),
+            (RoomType.Office, 3, false),
+            (RoomType.Conference, 1, false),
+            (RoomType.BreakRoom, 1, false),
+            (RoomType.Storage, 1, true),
+        };
+
+        /// <summary>
+        /// Every room's purpose, in row-major order, with those minimums met.
+        ///
+        /// Rolling each room independently at the weights in <see cref="PickRoomType"/> leaves too
+        /// much to chance: ServerRoom comes up 15% of the time, so on this twelve-room grid about
+        /// one seed in six generates a building with nowhere to patch the servers — no key hunt, and
+        /// no way out before level 4 — and a fair number produce no conference room or break room at
+        /// all. Both are silent failures, so they are repaired here rather than hoped for.
+        ///
+        /// Pure and deterministic, so <c>RoomPlanTests</c> can hammer it over thousands of seeds
+        /// without building a scene. The repair draws no randomness: a seed that already meets every
+        /// quota comes back exactly as it rolled.
+        /// </summary>
+        public static RoomType[] PlanRoomTypes(int cols, int rows, int lobbyIndex, System.Random rng)
+        {
+            var types = new RoomType[cols * rows];
+            for (int i = 0; i < types.Length; i++)
+            {
+                types[i] = i == lobbyIndex ? RoomType.Lobby : PickRoomType(rng);
+            }
+
+            foreach ((RoomType type, int minimum, bool far) in Quotas)
+            {
+                while (Count(types, type) < minimum)
+                {
+                    int donor = PickDonor(types, cols, lobbyIndex, type, far);
+                    if (donor < 0)
+                    {
+                        break; // nothing left that can spare a room; the grid is too small
+                    }
+
+                    types[donor] = type;
+                }
+            }
+
+            return types;
+        }
+
+        private static int Count(RoomType[] types, RoomType type)
+        {
+            int n = 0;
+            foreach (RoomType t in types)
+            {
+                if (t == type) n++;
+            }
+
+            return n;
+        }
+
+        private static int Minimum(RoomType type)
+        {
+            foreach ((RoomType t, int minimum, bool _) in Quotas)
+            {
+                if (t == type) return minimum;
+            }
+
+            return 0;
+        }
+
+        /// <summary>
+        /// The room to convert: one whose current purpose is above its own quota (or has none), at
+        /// the preferred end of the building. Index breaks ties, so the choice is a function of the
+        /// rolled plan and the grid alone.
+        /// </summary>
+        private static int PickDonor(RoomType[] types, int cols, int lobbyIndex, RoomType wanted, bool farFromLobby)
+        {
+            int lobbyC = lobbyIndex % cols, lobbyR = lobbyIndex / cols;
+            int best = -1, bestScore = 0;
+            for (int i = 0; i < types.Length; i++)
+            {
+                if (i == lobbyIndex || types[i] == wanted || Count(types, types[i]) <= Minimum(types[i]))
+                {
+                    continue;
+                }
+
+                int dc = i % cols - lobbyC, dr = i / cols - lobbyR;
+                int distance = dc * dc + dr * dr;
+                int score = farFromLobby ? distance : -distance;
+                if (best < 0 || score > bestScore)
+                {
+                    best = i;
+                    bestScore = score;
+                }
+            }
+
+            return best;
+        }
+
+        /// <summary>
         /// Places <see cref="PropLibrary"/> pieces in one room: against walls (back to the wall,
         /// away from doors and vent landings) or free-standing, never overlapping each other and
         /// never crowding the player spawn. Everything it makes is static, collidable Environment.
@@ -781,6 +1068,12 @@ namespace Vent.Editor
             private readonly List<(Vector3 pos, float radius)> placed = new();
             /// <summary>Floor area relative to the 10 m room the counts below were tuned for.</summary>
             private readonly float area;
+
+            // ---- Key hunt anchors, harvested from whatever this room happened to be given ----
+            public readonly List<Transform> Desks = new();
+            public readonly List<Transform> Racks = new();
+            public readonly List<(Vector3 pos, Quaternion rot)> CableSpots = new();
+            public Transform Whiteboard;
 
             public RoomDresser(GameAssets assets, System.Random random, Transform room, Vector3 roomCenter, float cellSize, float wallThickness,
                 List<Vector3> doorCenters, List<Vector3> ventLandings, Vector3 spawnCenter)
@@ -892,13 +1185,15 @@ namespace Vent.Editor
 
                     case RoomType.Lobby:
                         Litter();
+                        // Before anything else claims wall space: the hint is the entry point to the
+                        // key hunt, and the player must meet it on the way to the locked front door.
+                        Wall(PropLibrary.Kind.Whiteboard, force: true);
                         Wall(PropLibrary.Kind.ReceptionCounter);
                         for (int i = 0; i < Scaled(1); i++) Wall(PropLibrary.Kind.Couch);
                         if (rng.NextDouble() < 0.7) Wall(PropLibrary.Kind.Couch);
                         for (int i = 0; i < Scaled(2); i++) Corner(PropLibrary.Kind.PlantLarge);
                         for (int i = 0; i < Scaled(1); i++) Free(PropLibrary.Kind.PottedPlant, Rand(rng, 0f, 360f));
                         for (int i = 0; i < Scaled(1); i++) Wall(PropLibrary.Kind.Bookshelf);
-                        if (area > 1.5f) Wall(PropLibrary.Kind.Whiteboard);
                         Wall(PropLibrary.Kind.TrashBin);
                         break;
 
@@ -962,7 +1257,12 @@ namespace Vent.Editor
                 }
             }
 
-            private GameObject Wall(PropLibrary.Kind kind)
+            /// <param name="force">
+            /// Take the last attempt regardless of what else is against the wall. Only the lobby's
+            /// whiteboard uses this: it carries the hint that the whole key hunt hangs off, so a
+            /// room that happens to be full of couches must not be allowed to swallow it.
+            /// </param>
+            private GameObject Wall(PropLibrary.Kind kind, bool force = false)
             {
                 Vector2 fp = PropLibrary.Footprint(kind);
                 var sides = new List<int> { 0, 1, 2, 3 };
@@ -976,7 +1276,9 @@ namespace Vent.Editor
                         float half = cell / 2f - wall / 2f - fp.x / 2f - 0.3f;
                         float offset = Rand(rng, -half, half);
                         Vector3 pos = center - normal * (cell / 2f - wall / 2f - fp.y / 2f - 0.02f) + along * offset;
-                        if (Fits(pos, fp))
+                        bool last = force && side == sides[sides.Count - 1] && attempt == 5;
+                        // Doors and vent landings still win on the forced attempt; only furniture yields.
+                        if (Fits(pos, fp) || (last && Fits(pos, fp, ignoreProps: true)))
                         {
                             return Spawn(kind, pos, Quaternion.LookRotation(normal), fp);
                         }
@@ -1064,8 +1366,50 @@ namespace Vent.Editor
                 GameObject go = PropLibrary.Build(kind, a, rng, parent);
                 go.transform.SetPositionAndRotation(pos, rotation);
                 placed.Add((pos, Mathf.Max(fp.x, fp.y) / 2f));
+                Record(kind, go.transform);
                 return go;
             }
+
+            /// <summary>
+            /// Note anything the key hunt can hang off this piece. Cable coils go on flat surfaces
+            /// the room already has — a desktop, the top of a cabinet, a shelf — so no coil ever
+            /// lies on the floor where its collider would carve the NavMesh, and none of this costs
+            /// a placement attempt or a random draw.
+            /// </summary>
+            private void Record(PropLibrary.Kind kind, Transform go)
+            {
+                switch (kind)
+                {
+                    case PropLibrary.Kind.Desk:
+                        Desks.Add(go);
+                        CableSpot(go, new Vector3(0.55f, 0.79f, 0.22f));
+                        break;
+                    case PropLibrary.Kind.ServerRack:
+                        Racks.Add(go);
+                        break;
+                    case PropLibrary.Kind.Whiteboard:
+                        Whiteboard = go;
+                        break;
+                    case PropLibrary.Kind.FilingCabinet:
+                        CableSpot(go, new Vector3(0f, 1.35f, -0.12f));
+                        break;
+                    case PropLibrary.Kind.Shelving:
+                        CableSpot(go, new Vector3(0.75f, 0.735f, 0f));
+                        break;
+                    case PropLibrary.Kind.Bookshelf:
+                        CableSpot(go, new Vector3(0f, 1.83f, -0.08f));
+                        break;
+                    case PropLibrary.Kind.ConferenceTable:
+                        CableSpot(go, new Vector3(1.2f, 0.795f, 0.35f));
+                        break;
+                    case PropLibrary.Kind.Copier:
+                        CableSpot(go, new Vector3(0f, 1.09f, -0.05f));
+                        break;
+                }
+            }
+
+            private void CableSpot(Transform host, Vector3 local) =>
+                CableSpots.Add((host.TransformPoint(local), host.rotation));
         }
 
         // ------------------------------------------------------------------ pieces
