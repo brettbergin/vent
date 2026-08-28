@@ -13,6 +13,7 @@ namespace Vent.Tests.EditMode
         private static KeyHuntState Gathered(int required = 3)
         {
             var hunt = new KeyHuntState(required);
+            hunt.ReadHint();
             for (int i = 0; i < required; i++)
             {
                 hunt.TakeCable();
@@ -52,6 +53,7 @@ namespace Vent.Tests.EditMode
         public void CablesCountUpAndStopAtTheRequirement()
         {
             var hunt = new KeyHuntState(3);
+            hunt.ReadHint();
             Assert.IsTrue(hunt.TakeCable());
             Assert.IsTrue(hunt.TakeCable());
             Assert.AreEqual("FIND PATCH CABLES   2 / 3", hunt.Objective);
@@ -61,11 +63,17 @@ namespace Vent.Tests.EditMode
         }
 
         [Test]
-        public void TakingACableWithoutReadingTheBoardStillCounts()
+        public void NoCableCanBeTakenBeforeTheBoardIsRead()
         {
             var hunt = new KeyHuntState(3);
-            Assert.IsTrue(hunt.TakeCable(), "the whiteboard is a hint, never a gate");
-            Assert.IsTrue(hunt.HintRead, "and the objective catches up on its own");
+            Assert.IsFalse(hunt.CablesShown, "the coils are not out until the hint has been read");
+            Assert.IsFalse(hunt.TakeCable(), "the whiteboard is the gate");
+            Assert.AreEqual(0, hunt.CablesHeld);
+            Assert.AreEqual(KeyHuntStep.Unaware, hunt.Step);
+
+            hunt.ReadHint();
+            Assert.IsTrue(hunt.CablesShown);
+            Assert.IsTrue(hunt.TakeCable());
             Assert.AreEqual(KeyHuntStep.FindCables, hunt.Step);
         }
 
@@ -73,6 +81,7 @@ namespace Vent.Tests.EditMode
         public void ThePanelRefusesUntilEveryCableIsHeld()
         {
             var hunt = new KeyHuntState(3);
+            hunt.ReadHint();
             hunt.TakeCable();
             Assert.IsFalse(hunt.CanPatch);
             Assert.AreEqual(PanelAction.NotEnoughCables, hunt.TryRestorePower());

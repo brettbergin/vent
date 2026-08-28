@@ -336,6 +336,7 @@ namespace Vent.Editor
                 Shoot("panel", panel, panel.position, 1.0f, 0.15f);
             }
 
+            hunt.NoteRead(); // the coils are only out once the board has been read
             if (hunt.ActiveCables.Count > 0)
             {
                 Transform coil = hunt.ActiveCables[0].transform;

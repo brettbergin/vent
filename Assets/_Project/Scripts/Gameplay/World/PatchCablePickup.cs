@@ -9,8 +9,8 @@ namespace Vent.Gameplay.World
     /// are the objects the player is hunting for, and picking one up by accident while sprinting
     /// past would rob the find of its moment.
     ///
-    /// Every candidate coil exists in the baked scene; <see cref="KeyHuntDirector"/> shows three
-    /// of them at the start of each run and hides the rest.
+    /// Every candidate coil exists in the baked scene; <see cref="KeyHuntDirector"/> rolls three
+    /// of them at the start of each run and shows them once the whiteboard has been read.
     /// </summary>
     public sealed class PatchCablePickup : MonoBehaviour, IInteractable
     {
@@ -28,7 +28,7 @@ namespace Vent.Gameplay.World
         }
 
         public string Prompt => "TAKE PATCH CABLE";
-        public bool IsAvailable => true;
+        public bool IsAvailable => hunt == null || hunt.State.CablesShown;
 
         public void Interact() => hunt?.CableTaken(this);
     }

@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -55,9 +56,10 @@ namespace Vent.Tests.PlayMode
             yield return null;
         }
 
+        /// <summary>Read the board, then take the three coils it put out. ToArray: CableTaken removes from the live list as it goes.</summary>
         private void TakeEveryCable()
         {
-            // ToArray: CableTaken removes from the live list as it goes.
+            hunt.Note.Interact();
             foreach (PatchCablePickup cable in new List<PatchCablePickup>(hunt.ActiveCables))
             {
                 cable.Interact();
@@ -134,11 +136,28 @@ namespace Vent.Tests.PlayMode
             yield return Run(31337);
             Assert.AreEqual(hunt.State.CablesRequired, hunt.ActiveCables.Count, "the full set is always reachable");
 
+            // Issue #3: the coils are rolled at the start but not out until the board has been read.
+            foreach (PatchCablePickup cable in hunt.ActiveCables)
+            {
+                Assert.IsFalse(cable.gameObject.activeInHierarchy, "a rolled coil stays hidden until the whiteboard is read");
+                Assert.IsFalse(cable.IsAvailable, "and cannot be taken");
+            }
+
+            hunt.Note.Interact();
             var rooms = new HashSet<int>();
             foreach (PatchCablePickup cable in hunt.ActiveCables)
             {
-                Assert.IsTrue(cable.gameObject.activeInHierarchy, "a rolled coil is shown");
+                Assert.IsTrue(cable.gameObject.activeInHierarchy, "reading the board puts the coils out");
+                Assert.IsTrue(cable.IsAvailable);
                 rooms.Add(cable.Room);
+            }
+
+            foreach (PatchCablePickup cable in Object.FindObjectsByType<PatchCablePickup>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (!hunt.ActiveCables.Contains(cable))
+                {
+                    Assert.IsFalse(cable.gameObject.activeInHierarchy, "only the rolled coils come out");
+                }
             }
 
             Assert.AreEqual(hunt.ActiveCables.Count, rooms.Count, "one coil per room, so three cables are never one shelf");
@@ -235,6 +254,9 @@ namespace Vent.Tests.PlayMode
         public IEnumerator ThePanelRefusesWithoutEnoughCables()
         {
             yield return Run(123);
+            hunt.ActiveCables[0].Interact();
+            Assert.AreEqual(0, hunt.State.CablesHeld, "a coil that is not out yet cannot be taken, even by name");
+            hunt.Note.Interact();
             hunt.ActiveCables[0].Interact();
             Assert.AreEqual(1, hunt.State.CablesHeld);
 

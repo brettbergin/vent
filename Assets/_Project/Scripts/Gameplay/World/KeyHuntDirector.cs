@@ -15,7 +15,9 @@ namespace Vent.Gameplay.World
     /// walk straight to it on their second run. So the generator places *every* candidate — a
     /// drawer on each desk, a patch panel on each rack, a cable coil on every flat surface it
     /// passed — and this picks among them here, at runtime, once per run. Nothing moves; the roll
-    /// only decides what is shown, what is lit and what has a key in it.
+    /// only decides what is shown, what is lit and what has a key in it. The coils it rolled stay
+    /// hidden until the player reads the whiteboard: the board is the start of the hunt, not a
+    /// footnote to it.
     /// </summary>
     public sealed class KeyHuntDirector : MonoBehaviour
     {
@@ -57,7 +59,7 @@ namespace Vent.Gameplay.World
         /// <summary>The one rack the cables go into this run.</summary>
         public PatchPanel ActivePanel { get; private set; }
 
-        /// <summary>The three coils shown this run.</summary>
+        /// <summary>The three coils this run rolled; hidden until the board is read, then shown.</summary>
         public IReadOnlyList<PatchCablePickup> ActiveCables => activeCables;
 
         /// <summary>The seed the last roll actually used; logged so a strange run can be reproduced.</summary>
@@ -141,9 +143,17 @@ namespace Vent.Gameplay.World
 
         // ----- callbacks from the things the player looks at -----
 
+        /// <summary>The whiteboard. The first read puts this run's coils out; every read repeats the hint.</summary>
         public void NoteRead()
         {
-            State.ReadHint();
+            if (State.ReadHint())
+            {
+                foreach (PatchCablePickup cable in activeCables)
+                {
+                    cable.gameObject.SetActive(true);
+                }
+            }
+
             announcement?.Raise(hintText);
             PublishObjective();
         }
@@ -260,10 +270,7 @@ namespace Vent.Gameplay.World
                 Take(pool, State.CablesRequired, 0f, distinctRooms: false);
             }
 
-            foreach (PatchCablePickup cable in activeCables)
-            {
-                cable.gameObject.SetActive(true);
-            }
+            // Chosen, not shown: NoteRead puts them out once the player has read the board.
         }
 
         /// <summary>Greedily fill <see cref="activeCables"/>; true when it reached <paramref name="wanted"/>.</summary>

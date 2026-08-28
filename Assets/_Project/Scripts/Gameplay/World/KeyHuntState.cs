@@ -32,10 +32,12 @@ namespace Vent.Gameplay.World
     /// cables, plug them into a server rack, and the terminal that comes back up is sitting on
     /// the desk whose drawer holds the front door key.
     ///
-    /// Drawers open freely at any time — that is a satisfying affordance and there is no reason
-    /// to deny it — but the key only exists once the power is back, so opening all eighteen
-    /// drawers before patching finds nothing. <see cref="KeyHuntDirector"/> owns which desk it
-    /// is and re-rolls that every run; this owns the decisions.
+    /// The whiteboard is the gate: the coils do not exist until the hint has been read, so the
+    /// hunt always starts with the player knowing what they are looking for. Drawers open freely
+    /// at any time — that is a satisfying affordance and there is no reason to deny it — but the
+    /// key only exists once the power is back, so opening all eighteen drawers before patching
+    /// finds nothing. <see cref="KeyHuntDirector"/> owns which desk it is and re-rolls that every
+    /// run; this owns the decisions.
     /// </summary>
     public sealed class KeyHuntState
     {
@@ -87,18 +89,17 @@ namespace Vent.Gameplay.World
             return true;
         }
 
-        /// <summary>
-        /// Pick up one cable. Reading the hint is not a precondition — a player who walked past
-        /// the whiteboard still gets credit, and the objective line catches up.
-        /// </summary>
+        /// <summary>True once the cables are out to be found: the board has been read.</summary>
+        public bool CablesShown => HintRead;
+
+        /// <summary>Pick up one cable. Refused before the hint has been read — the coils are not there yet — and once the set is complete.</summary>
         public bool TakeCable()
         {
-            if (CablesHeld >= CablesRequired)
+            if (!HintRead || CablesHeld >= CablesRequired)
             {
                 return false;
             }
 
-            HintRead = true;
             CablesHeld++;
             return true;
         }

@@ -41,9 +41,9 @@ Gamepad is bound too (B = interact).
 - **Guns.** SMG and pistol level up from kills (`WeaponProgression`): damage, magazine, handling.
   Chambered round, staged reloads, recoil that climbs, damage falloff — all pure arithmetic.
 - **Perks.** A kill may drop an orb: Instant Reload, Invulnerable, One Shot, Nuke.
-- **Two ways out.** The front door unlocks at level 4. Or, from level 1: read the lobby whiteboard,
-  find three patch cables, patch the server rack, find the one desk whose monitor comes back, take
-  the key from its drawer. The key hunt re-rolls every run (`KeyHuntDirector`).
+- **Two ways out.** The front door unlocks at level 4. Or, from level 1: read the lobby whiteboard
+  (the three patch cables only appear once you have), find them, patch the server rack, find the one
+  desk whose monitor comes back, take the key from its drawer. The hunt re-rolls every run (`KeyHuntDirector`).
 - **The district.** Streets, lots, shops, towers, a park and a construction site, generated from the
   same kit as the offices. Outdoor vents (manholes, drains) wake when the door opens.
 - **Cars.** Twenty parked near the door: a red hero sedan plus a mix of hatchbacks, SUVs, pickups
