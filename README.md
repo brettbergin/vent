@@ -1,9 +1,9 @@
 # Vent
 
-A first-person zombie survival game for **Unity 6.3 LTS (6000.3.22f1)**, written to read like
-production code. One sealed office building, zombies pouring out of the AC vents, two guns that
-level up from kills, and a ladder of levels where only the numbers change — until the front door
-opens onto a five-by-five-block district full of cars. Get in one and run them over.
+A first-person zombie survival game built in **Unity 6.3 LTS (6000.3.22f1)**. One sealed office
+building, zombies pouring out of the AC vents, two guns that level up from kills, and a ladder of
+levels where only the numbers change — until the front door opens onto a five-by-five-block district
+full of cars. Get in one and run them over.
 
 Everything — geometry, prefabs, meshes, textures, materials, data, scenes, sounds — is **generated
 from code**. There is no binary art in the repository; a clean checkout rebuilds the project with one
