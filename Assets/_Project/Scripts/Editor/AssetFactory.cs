@@ -154,6 +154,9 @@ namespace Vent.Editor
             a.GunPolymer = Lit("M_GunPolymer", new Color(0.09f, 0.09f, 0.10f), smoothness: 0.28f, metallic: 0f);
             a.GunSteel = Lit("M_GunSteel", new Color(0.30f, 0.31f, 0.34f), smoothness: 0.72f, metallic: 0.85f);
             a.Brass = Lit("M_Brass", new Color(0.78f, 0.62f, 0.28f), smoothness: 0.8f, metallic: 0.9f);
+            // The key lies in a shadowed drawer with nothing to reflect: polished metal would go black there, so it is a
+            // warmer, matter brass with a faint glow of its own.
+            a.KeyBrass = Lit("M_KeyBrass", new Color(0.95f, 0.78f, 0.35f), smoothness: 0.55f, metallic: 0.35f, emission: new Color(0.9f, 0.7f, 0.3f) * 0.35f);
             a.Concrete = Lit("M_Concrete", new Color(0.62f, 0.62f, 0.62f), smoothness: 0.1f, tex: concrete);
             // Furniture
             a.Wood = Lit("M_Wood", new Color(0.70f, 0.58f, 0.46f), smoothness: 0.45f, tex: wood);

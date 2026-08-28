@@ -353,6 +353,18 @@ namespace Vent.Editor
                 // and the screen reads black whether it is lit or not.
                 Transform desk = hunt.KeyDrawer.transform.parent.parent;
                 Shoot("keydesk", desk, desk.position + Vector3.up * 0.9f, -2.4f, 0.9f);
+
+                // And the drawer itself, close, with the key shown as the player sees it the moment it opens.
+                Transform leaf = hunt.KeyDrawer.transform;
+                Transform key = leaf.Find("Key");
+                if (key != null)
+                {
+                    key.gameObject.SetActive(true);
+                }
+
+                // From a standing player's eye: steep enough to see over the front into the drawer.
+                Vector3 inside = leaf.position + leaf.forward * -0.15f;
+                Shoot("drawer", leaf, inside, 0.55f, 1.25f);
             }
 
             Object.DestroyImmediate(tex);

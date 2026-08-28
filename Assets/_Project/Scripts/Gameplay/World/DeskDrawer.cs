@@ -35,7 +35,7 @@ namespace Vent.Gameplay.World
         private float slide = 0.3f;
         [SerializeField, Min(0.1f)] private float openSharpness = 8f;
         [SerializeField, Min(0f), Tooltip("Seconds the key stays visible in the open drawer before the player pockets it.")]
-        private float keyDwell = 0.8f;
+        private float keyDwell = 2.2f;
 
         [Header("Screen")]
         [SerializeField] private Color darkColor = new(0.02f, 0.025f, 0.03f);

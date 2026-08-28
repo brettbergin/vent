@@ -421,6 +421,13 @@ namespace Vent.Editor
         /// <c>PlayerInteractor</c> resolves an interactable by walking *up* from whatever it hit,
         /// so a hit on the desktop or a leg finds nothing and only the drawer front prompts.
         /// </summary>
+        /// <summary>
+        /// The sliding drawer: a front with a handle, and behind it a real box — bottom, two sides
+        /// and a back — that lives inside the pedestal and comes out with the front, so an open
+        /// drawer is a drawer and not a floating plate. Every drawer holds a pad and a pen (this is
+        /// the "stationery" the README promises); the key lies on the bottom, hidden until the hunt
+        /// puts it there.
+        /// </summary>
         public static GameObject DrawerLeaf(Transform parent, GameAssets a)
         {
             var root = new GameObject("Drawer");
@@ -428,17 +435,35 @@ namespace Vent.Editor
             Transform t = root.transform;
 
             // 3 cm proud of the pedestal's front face, so the interactor's ray reaches the drawer
-            // before the pedestal collider stops it.
-            Box(t, "Front", new Vector3(0f, 0f, 0.005f), new Vector3(0.36f, 0.18f, 0.03f), a.Plastic);
+            // before the pedestal collider stops it. Local +Z is the pull-out direction.
+            const float width = 0.36f, height = 0.18f, depth = 0.32f, wall = 0.012f;
+            Box(t, "Front", new Vector3(0f, 0f, 0.005f), new Vector3(width, height, 0.03f), a.Plastic);
             Box(t, "Handle", new Vector3(0f, 0f, 0.025f), new Vector3(0.12f, 0.015f, 0.012f), a.MetalGrey, collider: false);
 
-            // The key, tucked at the back where it is only visible once the drawer is pulled out.
+            // The box behind the front, open at the top: bottom at the front's lower edge, low sides, a back.
+            float bottomY = -height / 2f + wall / 2f, sideHeight = 0.11f, centreZ = -depth / 2f - 0.01f;
+            Box(t, "Bottom", new Vector3(0f, bottomY, centreZ), new Vector3(width - 0.02f, wall, depth), a.MetalGrey, collider: false);
+            Box(t, "SideL", new Vector3(-(width - 0.02f) / 2f + wall / 2f, bottomY + sideHeight / 2f, centreZ), new Vector3(wall, sideHeight, depth), a.MetalGrey, collider: false);
+            Box(t, "SideR", new Vector3((width - 0.02f) / 2f - wall / 2f, bottomY + sideHeight / 2f, centreZ), new Vector3(wall, sideHeight, depth), a.MetalGrey, collider: false);
+            Box(t, "Back", new Vector3(0f, bottomY + sideHeight / 2f, centreZ - depth / 2f + wall / 2f), new Vector3(width - 0.02f, sideHeight, wall), a.MetalGrey, collider: false);
+
+            // Stationery: a pad and a pen, so an early drawer is not empty, just uninteresting.
+            float floorY = bottomY + wall / 2f;
+            Box(t, "Pad", new Vector3(-0.07f, floorY + 0.006f, centreZ + 0.02f), new Vector3(0.15f, 0.012f, 0.21f), a.Paper, collider: false);
+            Box(t, "Pen", new Vector3(0.09f, floorY + 0.004f, centreZ + 0.03f), new Vector3(0.008f, 0.008f, 0.14f), a.MetalDark, collider: false)
+                .transform.localRotation = Quaternion.Euler(0f, -8f, 0f);
+
+            // The key, on the bottom near the front where it reads as soon as the drawer is out. Big
+            // for a key — a hand's length — because it has to be seen from standing height in a
+            // dim room; a light in the drawer only washed it out.
             var key = new GameObject("Key");
             key.transform.SetParent(t, false);
-            key.transform.localPosition = new Vector3(0f, -0.03f, -0.16f);
-            Box(key.transform, "Shank", new Vector3(0f, 0f, 0f), new Vector3(0.008f, 0.004f, 0.075f), a.Brass, collider: false);
-            Box(key.transform, "Bit", new Vector3(0.012f, 0f, -0.03f), new Vector3(0.018f, 0.004f, 0.016f), a.Brass, collider: false);
-            Cyl(key.transform, "Bow", new Vector3(0f, 0f, 0.045f), 0.016f, 0.002f, a.Brass, collider: false)
+            key.transform.localPosition = new Vector3(0.06f, floorY + 0.006f, -0.2f); // mid-back: what a standing player sees first over the front
+            key.transform.localRotation = Quaternion.Euler(0f, 35f, 0f);
+            Box(key.transform, "Shank", new Vector3(0f, 0f, 0f), new Vector3(0.016f, 0.01f, 0.13f), a.KeyBrass, collider: false);
+            Box(key.transform, "Bit", new Vector3(0.022f, 0f, -0.05f), new Vector3(0.034f, 0.01f, 0.03f), a.KeyBrass, collider: false);
+            Box(key.transform, "Bit2", new Vector3(0.018f, 0f, -0.02f), new Vector3(0.026f, 0.01f, 0.014f), a.KeyBrass, collider: false);
+            Cyl(key.transform, "Bow", new Vector3(0f, 0f, 0.085f), 0.032f, 0.005f, a.KeyBrass, collider: false)
                 .transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
             key.SetActive(false);
 

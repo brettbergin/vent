@@ -237,6 +237,27 @@ namespace Vent.Tests.EditMode
                     Assert.AreEqual(Layers.EnvironmentIndex, mover.gameObject.layer,
                         $"{mover.name} must be on Environment: that is what Layers.InteractMask looks at");
                 }
+
+                // Issue #5: an open drawer is a box, not a floating front; it opens toward the chair,
+                // the side the monitor faces; the key lies on its bottom and only exists once found.
+                foreach (DeskDrawer drawer in drawers)
+                {
+                    Transform leaf = drawer.transform;
+                    foreach (string part in new[] { "Front", "Bottom", "SideL", "SideR", "Back", "Pad", "Key" })
+                    {
+                        Assert.IsNotNull(leaf.Find(part), $"{drawer.name} on {leaf.parent.parent.name} has a {part}");
+                    }
+
+                    Transform desk = leaf.parent.parent; // Drawer → DrawerAnchor → desk
+                    Transform screen = desk.Find("Screen"), monitor = desk.Find("Monitor");
+                    Assert.IsNotNull(screen);
+                    Assert.IsNotNull(monitor);
+                    Assert.Less(desk.InverseTransformDirection(leaf.forward).z, -0.9f, $"{desk.name}: the drawer slides out toward the chair (-Z)");
+                    Assert.Less(screen.localPosition.z, monitor.localPosition.z, $"{desk.name}: the screen is on the chair side of the monitor");
+                    Transform key = leaf.Find("Key"), bottom = leaf.Find("Bottom");
+                    Assert.Greater(key.localPosition.y, bottom.localPosition.y, "the key lies on the drawer bottom, not through it");
+                    Assert.IsFalse(key.gameObject.activeSelf, "the key does not exist until the hunt puts it there");
+                }
             }
             finally
             {

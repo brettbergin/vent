@@ -68,7 +68,7 @@ namespace Vent.Editor
             // Nature: the leaf atlas (outdoor wind and the still indoor version), bark, mulch, glazed pots
             Foliage, FoliageCanopy, FoliageIndoor, Bark, Birch, Mulch, Ceramic, CeramicDark,
             // Key hunt: the cable jacket that has to catch the eye across a room, and the hint board
-            CableBlue, WhiteboardHint;
+            CableBlue, WhiteboardHint, KeyBrass;
         public Material[] CarPaints;
         /// <summary>Slippery, dead bodywork: a car slides along a wall instead of catching on it.</summary>
         public PhysicsMaterial CarBodyPhysics;

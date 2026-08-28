@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!114 &-8547966215632183496
+--- !u!114 &-3442422455313083229
 MonoBehaviour:
   m_ObjectHideFlags: 3
   m_CorrespondingSourceObject: {fileID: 0}
@@ -41,9 +41,9 @@ MonoBehaviour:
   m_Name: VentPostFxOutdoor
   m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.VolumeProfile
   components:
-  - {fileID: -8547966215632183496}
-  - {fileID: 4336894811124172155}
---- !u!114 &4336894811124172155
+  - {fileID: -3442422455313083229}
+  - {fileID: 72669853450193012}
+--- !u!114 &72669853450193012
 MonoBehaviour:
   m_ObjectHideFlags: 3
   m_CorrespondingSourceObject: {fileID: 0}
