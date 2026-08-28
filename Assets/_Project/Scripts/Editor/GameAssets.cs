@@ -43,6 +43,8 @@ namespace Vent.Editor
         public StringEventChannel Objective;
         public VoidEventChannel KeyFound;
         public FloatEventChannel VehicleSpeed;
+        public OfficeItemEventChannel ItemCollected;
+        public VoidEventChannel MapToggled;
 
         // Data
         public DifficultyProfile Difficulty;
@@ -68,7 +70,9 @@ namespace Vent.Editor
             // Nature: the leaf atlas (outdoor wind and the still indoor version), bark, mulch, glazed pots
             Foliage, FoliageCanopy, FoliageIndoor, Bark, Birch, Mulch, Ceramic, CeramicDark,
             // Key hunt: the cable jacket that has to catch the eye across a room, and the hint board
-            CableBlue, WhiteboardHint, KeyBrass;
+            CableBlue, WhiteboardHint, KeyBrass,
+            // The floor plan on paper; made while the Building scene is generated, since it depends on the plan
+            BuildingMapPaper;
         public Material[] CarPaints;
         /// <summary>Slippery, dead bodywork: a car slides along a wall instead of catching on it.</summary>
         public PhysicsMaterial CarBodyPhysics;

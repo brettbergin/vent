@@ -16,17 +16,20 @@ namespace Vent.Gameplay.Flow
         [SerializeField] private PlayerSpawnPoint spawnPoint;
         [SerializeField] private PlayerCharacter player;
         [SerializeField] private KeyHuntDirector keyHunt;
+        [SerializeField] private OfficeItemDirector officeItems;
 
         public LevelDirector Director => director;
         public PlayerCharacter Player => player;
         public KeyHuntDirector KeyHunt => keyHunt;
+        public OfficeItemDirector OfficeItems => officeItems;
 
-        public void Configure(LevelDirector levelDirector, PlayerSpawnPoint spawn, PlayerCharacter playerCharacter, KeyHuntDirector hunt)
+        public void Configure(LevelDirector levelDirector, PlayerSpawnPoint spawn, PlayerCharacter playerCharacter, KeyHuntDirector hunt, OfficeItemDirector items = null)
         {
             director = levelDirector;
             spawnPoint = spawn;
             player = playerCharacter;
             keyHunt = hunt;
+            officeItems = items;
         }
 
         private void OnEnable() => GameServices.Register(this);
@@ -44,6 +47,7 @@ namespace Vent.Gameplay.Flow
             // After StartRun: its level-1 announcement relocks the front door and clears the key,
             // so the hunt's fresh roll and objective line have to land on top of that, not under it.
             keyHunt?.BeginRun();
+            officeItems?.BeginRun();
         }
 
         public void EndRun()

@@ -652,6 +652,27 @@ namespace Vent.Editor
             var socket = new GameObject("WeaponSocket");
             socket.transform.SetParent(camGo.transform, false);
 
+            // The rear-view mirror's camera: on the back of the head, into a small texture, nothing
+            // fancy — no post, no shadows, no AA — and off until the mirror has been found.
+            var rearGo = new GameObject("RearCamera");
+            rearGo.transform.SetParent(camGo.transform, false);
+            rearGo.transform.localPosition = new Vector3(0f, 0.05f, -0.1f);
+            rearGo.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+            var rear = rearGo.AddComponent<Camera>();
+            rear.fieldOfView = 70f;
+            rear.nearClipPlane = 0.1f;
+            rear.farClipPlane = 60f;
+            rear.cullingMask = ~(1 << Layers.WeaponViewIndex);
+            rear.enabled = false;
+            UniversalAdditionalCameraData rearData = rear.GetUniversalAdditionalCameraData();
+            rearData.renderType = CameraRenderType.Base;
+            rearData.renderPostProcessing = false;
+            rearData.renderShadows = false;
+            rearData.antialiasing = AntialiasingMode.None;
+            rearData.requiresColorOption = CameraOverrideOption.Off;
+            rearData.requiresDepthOption = CameraOverrideOption.Off;
+            rearGo.AddComponent<RearViewMirror>().Configure(a.ItemCollected, a.Level, rear);
+
             controller.Input = a.InputReader;
             look.Input = a.InputReader;
             look.PitchPivot = pivot.transform;
@@ -666,12 +687,14 @@ namespace Vent.Editor
             inventory.HitChannel = a.Hit;
             inventory.NoiseChannel = a.Noise;
             character.Configure(a.InputReader, cam, inventory, motion, a.Level, a.PerkCollected, weaponCam);
+            SetPrivate(character, "mapToggled", a.MapToggled);
             interactor.Configure(a.InputReader, cam, a.Prompt);
 
             root.layer = Layers.PlayerIndex;
             pivot.layer = Layers.PlayerIndex;
             camGo.layer = Layers.PlayerIndex;
             weaponCamGo.layer = Layers.PlayerIndex;
+            rearGo.layer = Layers.PlayerIndex;
             return Save(root);
         }
 

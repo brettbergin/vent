@@ -45,6 +45,8 @@ namespace Vent.Player.Input
         public event Action PausePressed;
         /// <summary>Use what you are looking at: open the door, get in or out of a car.</summary>
         public event Action InteractPressed;
+        /// <summary>Toggle the building map, once the player has found one.</summary>
+        public event Action MapPressed;
 
         // --- UI (events) ---
         public event Action UnpausePressed;
@@ -52,7 +54,7 @@ namespace Vent.Player.Input
         private InputActionMap gameplay;
         private InputActionMap ui;
 
-        private InputAction move, look, lookAnalog, jump, sprint, fire, aim, reload, weapon1, weapon2, cycle, swap, pause, interact, unpause;
+        private InputAction move, look, lookAnalog, jump, sprint, fire, aim, reload, weapon1, weapon2, cycle, swap, pause, interact, map, unpause;
 
         private const float ScrollNotch = 1f;
         private const float ScrollCooldown = 0.15f;
@@ -88,6 +90,7 @@ namespace Vent.Player.Input
             swap = gameplay.FindAction("SwapWeapon", true);
             pause = gameplay.FindAction("Pause", true);
             interact = gameplay.FindAction("Interact", true);
+            map = gameplay.FindAction("Map", true);
             unpause = ui.FindAction("Unpause", true);
 
             move.performed += OnMove;
@@ -111,6 +114,7 @@ namespace Vent.Player.Input
             swap.performed += OnSwap;
             pause.performed += OnPause;
             interact.performed += OnInteract;
+            map.performed += OnMap;
             unpause.performed += OnUnpause;
         }
 
@@ -142,6 +146,7 @@ namespace Vent.Player.Input
             swap.performed -= OnSwap;
             pause.performed -= OnPause;
             interact.performed -= OnInteract;
+            map.performed -= OnMap;
             unpause.performed -= OnUnpause;
 
             DisableAll();
@@ -260,6 +265,7 @@ namespace Vent.Player.Input
         private void OnSwap(InputAction.CallbackContext ctx) => WeaponSwapPressed?.Invoke();
         private void OnPause(InputAction.CallbackContext ctx) => PausePressed?.Invoke();
         private void OnInteract(InputAction.CallbackContext ctx) => InteractPressed?.Invoke();
+        private void OnMap(InputAction.CallbackContext ctx) => MapPressed?.Invoke();
         private void OnUnpause(InputAction.CallbackContext ctx) => UnpausePressed?.Invoke();
 
         /// <summary>

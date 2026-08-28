@@ -6,6 +6,7 @@ using UnityEngine.AI;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using Vent.Core.Events;
+using Vent.Core.Items;
 using Vent.Core.Utility;
 using Vent.Enemies.Spawning;
 using Vent.Gameplay.World;
@@ -82,6 +83,13 @@ namespace Vent.Editor
 
             /// <summary>The lobby's whiteboard, which carries the hint. Never null: the lobby dressing forces one.</summary>
             public Transform LobbyWhiteboard;
+
+            // ---- The plan, for the map the player can find ----
+            public int Columns, Rows;
+            public float CellSize;
+            public RoomType[] RoomPlan = System.Array.Empty<RoomType>();
+            /// <summary>Pairs of cell indices (row-major, smaller first) that share a door.</summary>
+            public HashSet<(int, int)> Doors = new();
         }
 
         // BatchingStatic matters: without the GPU Resident Drawer (see README, "GPU Resident Drawer")
@@ -116,6 +124,10 @@ namespace Vent.Editor
             result.Footprint = new Bounds(new Vector3(0f, h / 2f, 0f), new Vector3(cols * cell + 2f, h + 3f, rows * cell + 2f));
 
             HashSet<(int, int)> doors = PlanDoors(cols, rows, rng, layout.ExtraDoorChance);
+            result.Columns = cols;
+            result.Rows = rows;
+            result.CellSize = cell;
+            result.Doors = doors;
             var ventFloorPoints = new List<Vector3>();
             var doorCenters = new List<Vector3>();
 
@@ -287,6 +299,7 @@ namespace Vent.Editor
             // key hunt depends on (a server room to patch, offices to hide a key in) can only be
             // checked once every room has rolled.
             RoomType[] plan = PlanRoomTypes(cols, rows, lobbyR * cols + lobbyC, rng);
+            result.RoomPlan = plan;
             for (int r = 0; r < rows; r++)
             {
                 for (int c = 0; c < cols; c++)
@@ -435,6 +448,49 @@ namespace Vent.Editor
         }
 
         // ------------------------------------------------------------------ key hunt
+
+        /// <summary>
+        /// The other things to find: a printed floor plan and a vanity mirror, each with a handful of
+        /// candidate spots on the flat surfaces the dresser noted (the same pool the cable coils use),
+        /// picked among at runtime by <see cref="OfficeItemDirector"/>. Built after <see cref="Generate"/>
+        /// returns, for the same reasons as the key hunt: nothing here may be static or lightmapped.
+        /// </summary>
+        public static OfficeItemDirector BuildOfficeItems(GameAssets a, Result building, OfficeItemEventChannel itemCollected, StringEventChannel announcement,
+            Texture2D map, Rect mapWorldRect, int candidatesPerItem = 8)
+        {
+            var rootGo = new GameObject("OfficeItems");
+            Transform root = rootGo.transform;
+            root.SetParent(building.Root.transform, false);
+            var director = rootGo.AddComponent<OfficeItemDirector>();
+
+            // Spread the candidates over the spots, alternating so the two items never share a pool.
+            var spots = new List<(Vector3 position, Quaternion rotation, int room)>(building.CableSpots);
+            var rng = new System.Random(777);
+            for (int i = spots.Count - 1; i > 0; i--)
+            {
+                int j = rng.Next(i + 1);
+                (spots[i], spots[j]) = (spots[j], spots[i]);
+            }
+
+            var maps = new List<OfficeItemPickup>();
+            var mirrors = new List<OfficeItemPickup>();
+            Transform mapsRoot = Child(root, "Maps"), mirrorsRoot = Child(root, "Mirrors");
+            for (int i = 0; i < spots.Count && (maps.Count < candidatesPerItem || mirrors.Count < candidatesPerItem); i++)
+            {
+                bool wantMap = i % 2 == 0 ? maps.Count < candidatesPerItem : mirrors.Count >= candidatesPerItem;
+                GameObject prop = wantMap ? PropLibrary.BuildingMapSheet(mapsRoot, a) : PropLibrary.VanityMirror(mirrorsRoot, a);
+                prop.transform.SetPositionAndRotation(spots[i].position, spots[i].rotation);
+                var pickup = prop.AddComponent<OfficeItemPickup>();
+                pickup.Configure(director, wantMap ? OfficeItem.BuildingMap : OfficeItem.RearViewMirror, spots[i].room);
+                (wantMap ? maps : mirrors).Add(pickup);
+                prop.SetActive(false); // BeginRun shows the one of each it rolls
+            }
+
+            director.Configure(itemCollected, announcement, maps.ToArray(), mirrors.ToArray(), map, mapWorldRect, building.PlayerSpawn);
+            Layers.SetRecursively(rootGo, Layers.EnvironmentIndex);
+            Debug.Log($"[Vent] Office items: {maps.Count} map spots, {mirrors.Count} mirror spots");
+            return director;
+        }
 
         /// <summary>
         /// The alternate way out: the hint on the lobby whiteboard, a coil of patch cable on every

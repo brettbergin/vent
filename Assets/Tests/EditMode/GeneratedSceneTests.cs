@@ -186,6 +186,46 @@ namespace Vent.Tests.EditMode
         }
 
         [Test]
+        public void BuildingHasOfficeItemsToFindAndNoneOfThemIsStatic()
+        {
+            Scene scene = EditorSceneManager.OpenScene(Vent.Editor.Paths.BuildingScene, OpenSceneMode.Single);
+            try
+            {
+                OfficeItemDirector director = null;
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    director ??= root.GetComponentInChildren<OfficeItemDirector>(includeInactive: true);
+                }
+
+                Assert.IsNotNull(director, "the building has an office item director");
+                Assert.GreaterOrEqual(director.Maps.Count, 6, "enough map spots to move between runs");
+                Assert.GreaterOrEqual(director.Mirrors.Count, 6, "enough mirror spots");
+                Assert.IsNotNull(director.MapTexture, "the floor plan was drawn at regen");
+                Assert.IsTrue(director.MapTexture.width >= 512 && director.MapTexture.height >= 256);
+                Assert.Greater(director.MapWorldRect.width, director.MapWorldRect.height * 0.5f, "the map covers the building's footprint");
+
+                var all = new List<OfficeItemPickup>();
+                all.AddRange(director.Maps);
+                all.AddRange(director.Mirrors);
+                foreach (OfficeItemPickup item in all)
+                {
+                    Assert.IsFalse(item.gameObject.activeSelf, $"{item.name} is hidden in the saved scene; BeginRun shows one of each");
+                    Assert.AreEqual((StaticEditorFlags)0, GameObjectUtility.GetStaticEditorFlags(item.gameObject), $"{item.name} must stay non-static");
+                    Assert.IsNotNull(item.GetComponentInChildren<Collider>(true), $"{item.name} needs a collider for the interactor's ray");
+                    Assert.AreEqual(Layers.EnvironmentIndex, item.gameObject.layer, $"{item.name} must be on Environment: that is what Layers.InteractMask looks at");
+                }
+
+                var texture = AssetDatabase.LoadAssetAtPath<Texture2D>($"{Vent.Editor.Paths.Textures}/T_BuildingMap.png");
+                Assert.IsNotNull(texture, "the floor plan is a texture asset");
+                Assert.AreSame(texture, director.MapTexture);
+            }
+            finally
+            {
+                EditorSceneManager.OpenScene($"{Vent.Editor.Paths.Scenes}/{SceneNames.Boot}.unity", OpenSceneMode.Single);
+            }
+        }
+
+        [Test]
         public void BuildingHasAKeyHuntAndNoneOfItIsStatic()
         {
             string path = Vent.Editor.Paths.BuildingScene;

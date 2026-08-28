@@ -4,6 +4,8 @@ using Vent.Core;
 using System.Collections.Generic;
 using System.Text;
 using Vent.Core.Events;
+using Vent.Core.Items;
+using Vent.Core.Services;
 using Vent.Core.Perks;
 using Vent.Core.Utility;
 
@@ -34,6 +36,10 @@ namespace Vent.UI.Screens
         private FloatEventChannel vehicleSpeed;
         [SerializeField, Tooltip("The key hunt's current step; empty hides the line.")]
         private StringEventChannel objective;
+        [SerializeField, Tooltip("A map or a mirror was picked up; the map arrives with its image.")]
+        private OfficeItemEventChannel itemCollected;
+        [SerializeField, Tooltip("The map key. Only does anything once a map has been found.")]
+        private VoidEventChannel mapToggled;
 
         [Header("Tuning")]
         [SerializeField, Min(0f)] private float crosshairPixelsPerDegree = 22f;
@@ -42,6 +48,9 @@ namespace Vent.UI.Screens
         private readonly HudViewModel model = new();
 
         private VisualElement ammo, hitmarker, banner, toast, promptElement, objectiveElement, speedo;
+        private VisualElement mapElement, mapImage, mapMarker, mirrorElement, mirrorView;
+        private Rect mapWorld;
+        private RenderTexture mirrorTexture;
         private VisualElement[] slots;
 
         private float vignetteFlash;
@@ -59,11 +68,22 @@ namespace Vent.UI.Screens
         /// <summary>The bound data source; exposed for tests.</summary>
         public HudViewModel Model => model;
 
+        /// <summary>The player is carrying the building map.</summary>
+        public bool HasMap { get; private set; }
+
+        /// <summary>The map overlay is up.</summary>
+        public bool IsMapVisible { get; private set; }
+
+        /// <summary>The player is carrying the rear-view mirror.</summary>
+        public bool HasMirror { get; private set; }
+
         public void Configure(HealthEventChannel health, WeaponHudEventChannel weapon, WeaponLevelUpEventChannel weaponLevel,
             BoolEventChannel hit, LevelEventChannel level, IntEventChannel kills, PerkEventChannel perks,
             StringEventChannel promptChannel = null, StringEventChannel announcementChannel = null, FloatEventChannel speedChannel = null,
-            StringEventChannel objectiveChannel = null)
+            StringEventChannel objectiveChannel = null, OfficeItemEventChannel itemChannel = null, VoidEventChannel mapToggleChannel = null)
         {
+            itemCollected = itemChannel;
+            mapToggled = mapToggleChannel;
             objective = objectiveChannel;
             prompt = promptChannel;
             announcement = announcementChannel;
@@ -91,6 +111,8 @@ namespace Vent.UI.Screens
             announcement?.Subscribe(OnAnnouncement);
             vehicleSpeed?.Subscribe(OnVehicleSpeed);
             objective?.Subscribe(OnObjective);
+            itemCollected?.Subscribe(OnItem);
+            mapToggled?.Subscribe(OnMapToggled);
         }
 
         protected override void OnDisable()
@@ -106,6 +128,8 @@ namespace Vent.UI.Screens
             announcement?.Unsubscribe(OnAnnouncement);
             vehicleSpeed?.Unsubscribe(OnVehicleSpeed);
             objective?.Unsubscribe(OnObjective);
+            itemCollected?.Unsubscribe(OnItem);
+            mapToggled?.Unsubscribe(OnMapToggled);
             base.OnDisable();
         }
 
@@ -120,6 +144,11 @@ namespace Vent.UI.Screens
             promptElement = r.Q<VisualElement>("prompt");
             objectiveElement = r.Q<VisualElement>("objective");
             speedo = r.Q<VisualElement>("speedo");
+            mapElement = r.Q<VisualElement>("map");
+            mapImage = r.Q<VisualElement>("map-image");
+            mapMarker = r.Q<VisualElement>("map-marker");
+            mirrorElement = r.Q<VisualElement>("mirror");
+            mirrorView = r.Q<VisualElement>("mirror-view");
             slots = new[] { r.Q<VisualElement>("slot-0"), r.Q<VisualElement>("slot-1") };
         }
 
@@ -142,6 +171,7 @@ namespace Vent.UI.Screens
 
         private void Update()
         {
+            UpdateItems();
             if (!IsVisible)
             {
                 return;
@@ -229,6 +259,11 @@ namespace Vent.UI.Screens
 
         private void OnLevel(LevelInfo info)
         {
+            if (info.Level <= 1)
+            {
+                DropItems(); // a new run starts at level 1 with empty pockets
+            }
+
             EnsureBound();
             killsRequired = info.KillsRequired;
             model.LevelText = $"LEVEL {info.Level}";
@@ -353,6 +388,77 @@ namespace Vent.UI.Screens
             toast.AddToClassList("toast--visible");
             toastHide?.Pause();
             toastHide = toast.schedule.Execute(() => toast.RemoveFromClassList("toast--visible")).StartingIn(1800);
+        }
+
+        // ------------------------------------------------------------------ office items
+
+        private void OnItem(OfficeItemInfo info)
+        {
+            switch (info.Kind)
+            {
+                case OfficeItem.BuildingMap:
+                    HasMap = info.Map != null;
+                    mapWorld = info.WorldRect;
+                    if (mapImage != null && info.Map != null)
+                    {
+                        mapImage.style.backgroundImage = new StyleBackground(info.Map);
+                    }
+
+                    break;
+                case OfficeItem.RearViewMirror:
+                    HasMirror = true;
+                    break;
+            }
+        }
+
+        private void OnMapToggled()
+        {
+            if (!HasMap)
+            {
+                return;
+            }
+
+            IsMapVisible = !IsMapVisible;
+            mapElement?.EnableInClassList("map--visible", IsMapVisible);
+        }
+
+        private void DropItems()
+        {
+            HasMap = false;
+            HasMirror = false;
+            IsMapVisible = false;
+            mapElement?.EnableInClassList("map--visible", false);
+            mirrorElement?.EnableInClassList("mirror--visible", false);
+            Root?.EnableInClassList("hud--mirror", false);
+            mirrorTexture = null;
+        }
+
+        /// <summary>The player's dot on the map and the live rear view: polled, since both change every frame.</summary>
+        private void UpdateItems()
+        {
+            if (IsMapVisible && mapMarker != null && mapImage != null && GameServices.TryGet(out IPlayerTarget target) && mapWorld.width > 0f && mapWorld.height > 0f)
+            {
+                Vector3 p = target.Position;
+                float u = (p.x - mapWorld.xMin) / mapWorld.width;
+                float v = (p.z - mapWorld.yMin) / mapWorld.height;
+                float w = mapImage.resolvedStyle.width, h = mapImage.resolvedStyle.height;
+                float size = mapMarker.resolvedStyle.width;
+                mapMarker.style.left = Mathf.Clamp01(u) * w - size / 2f;
+                mapMarker.style.top = (1f - Mathf.Clamp01(v)) * h - size / 2f;
+                Vector3 forward = target.Transform != null ? target.Transform.forward : Vector3.forward;
+                mapMarker.style.rotate = new Rotate(Angle.Degrees(Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg));
+            }
+
+            IRearViewSource rear = null;
+            bool mirrorOn = HasMirror && GameServices.TryGet(out rear) && rear.IsActive && rear.View != null;
+            if (mirrorOn && mirrorView != null && rear.View != mirrorTexture)
+            {
+                mirrorTexture = rear.View;
+                mirrorView.style.backgroundImage = Background.FromRenderTexture(mirrorTexture);
+            }
+
+            mirrorElement?.EnableInClassList("mirror--visible", mirrorOn);
+            Root?.EnableInClassList("hud--mirror", mirrorOn);
         }
     }
 }

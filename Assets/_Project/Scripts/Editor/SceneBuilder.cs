@@ -97,7 +97,7 @@ namespace Vent.Editor
             ui.transform.SetParent(app.transform, false);
 
             HudScreen hud = Screen<HudScreen>(ui.transform, "HUD", a, "Hud.uxml", 0);
-            hud.Configure(a.Health, a.WeaponHud, a.WeaponLevelUp, a.Hit, a.Level, a.KillsThisLevel, a.PerkCollected, a.Prompt, a.Announcement, a.VehicleSpeed, a.Objective);
+            hud.Configure(a.Health, a.WeaponHud, a.WeaponLevelUp, a.Hit, a.Level, a.KillsThisLevel, a.PerkCollected, a.Prompt, a.Announcement, a.VehicleSpeed, a.Objective, a.ItemCollected, a.MapToggled);
             hud.ConfigureVisibility(a.GameState, GameState.Playing);
 
             MainMenuScreen menu = Screen<MainMenuScreen>(ui.transform, "MainMenu", a, "MainMenu.uxml", 5);
@@ -239,6 +239,12 @@ namespace Vent.Editor
             // After the NavMesh bake for the same reason the door leaves are: its drawers slide and
             // its coils come and go, so none of it may be static or carved into the walkable surface.
             KeyHuntDirector keyHunt = BuildingGenerator.BuildKeyQuest(a, building, a.Objective, a.Announcement, a.KeyFound);
+            // The floor plan the player can find, drawn from this building's actual plan; the same
+            // image is the paper prop's print and the HUD's overlay.
+            Texture2D mapTexture = TextureFactory.BuildingMap(building.Columns, building.Rows, building.CellSize, building.RoomPlan, building.Doors, building.LobbyCell,
+                building.Vents.ConvertAll(v => v.transform.position), building.FrontDoorPosition, layout.DoorWidth, out Rect mapWorld);
+            a.BuildingMapPaper = AssetFactory.ImageMaterial("M_BuildingMap", mapTexture, smoothness: 0.25f);
+            OfficeItemDirector officeItems = BuildingGenerator.BuildOfficeItems(a, building, a.ItemCollected, a.Announcement, mapTexture, mapWorld);
             VehiclePlacer.Place(a, district.ParkingSpots, null, districtLayout.Seed);
 
             var systems = new GameObject("Systems");
@@ -263,7 +269,7 @@ namespace Vent.Editor
             playerGo.transform.SetPositionAndRotation(building.PlayerSpawn, Quaternion.Euler(0f, building.PlayerYaw, 0f));
             var player = playerGo.GetComponent<PlayerCharacter>();
 
-            systems.AddComponent<BuildingSceneController>().Configure(director, spawnPoint, player, keyHunt);
+            systems.AddComponent<BuildingSceneController>().Configure(director, spawnPoint, player, keyHunt, officeItems);
 
             // Outdoors is graded a touch brighter and less muted; the Atmosphere fades this volume in
             // (and the fog out) as the player steps through the front door.

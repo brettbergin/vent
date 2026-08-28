@@ -166,6 +166,9 @@ namespace Vent.Core.Audio
                     // A pedestal drawer on steel runners, ending against its stop.
                     return Mix(Lowpass(NoiseBurst(rng, 0.35f, 11f, 0.4f), 1600f), Tone(0.3f, 220f, 155f, 8f, 0.2f),
                         Lowpass(NoiseBurst(rng, 0.05f, 95f), 1200f, 0.4f));
+                case SoundId.ItemPickup:
+                    // Paper lifted off a desk, and the thing on it settling into a pocket.
+                    return Mix(Highpass(NoiseBurst(rng, 0.14f, 35f), 1800f, 0.45f), Lowpass(NoiseBurst(rng, 0.04f, 130f), 2600f, 0.45f), Tone(0.09f, 1500f, 950f, 45f, 0.18f));
                 case SoundId.KeyPickup:
                     // Small brass: two bright partials and a scrape.
                     return Mix(Tone(0.12f, 2600f, 2600f, 40f, 0.25f), Tone(0.15f, 3400f, 3400f, 30f, 0.16f),

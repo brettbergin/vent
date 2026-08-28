@@ -27,7 +27,8 @@ and press Play. The `make` targets wrap `tools/*.sh`; those are bash scripts.
 | Move / sprint / jump | WASD · Shift · Space | Throttle / brake | W / S (hold S at a stop to reverse) |
 | Look / fire / aim | Mouse · LMB · RMB | Steer / handbrake | A D · Space |
 | Reload / switch weapon | R · 1 2 Q scroll | Look around | Mouse (the camera swings back behind the car) |
-| Interact | **E** — doors, cables, racks, drawers, cars | Fire out of the window | LMB (pistol only) |
+| Interact | **E** — doors, cables, racks, drawers, cars, items | Fire out of the window | LMB (pistol only) |
+| Map | **C** (once you have found one) | | |
 | Pause | Esc | Get out | E |
 
 Gamepad is bound too (B = interact).
@@ -44,6 +45,10 @@ Gamepad is bound too (B = interact).
 - **Two ways out.** The front door unlocks at level 4. Or, from level 1: read the lobby whiteboard
   (the three patch cables only appear once you have), find them, patch the server rack, find the one
   desk whose monitor comes back, take the key from its drawer. The hunt re-rolls every run (`KeyHuntDirector`).
+- **Things to find.** A printed floor plan and a vanity mirror lie somewhere in the office each run
+  (`OfficeItemDirector`, rolled like the key hunt). The map is a translucent overlay on **C** with
+  you on it — rooms by type, doors, vents, the front door; the mirror is a live rear view at the
+  top of the screen from a second, cheap camera on the back of your head (`RearViewMirror`).
 - **The district.** Streets, lots, shops, towers, a park and a construction site, generated from the
   same kit as the offices. Outdoor vents (manholes, drains) wake when the door opens.
 - **Cars.** Twenty parked near the door: a red hero sedan plus a mix of hatchbacks, SUVs, pickups

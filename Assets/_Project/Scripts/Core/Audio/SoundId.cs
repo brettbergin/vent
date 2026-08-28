@@ -50,5 +50,7 @@ namespace Vent.Core.Audio
         PowerRestore,
         DrawerOpen,
         KeyPickup,
+        /// <summary>A map or a mirror picked up: paper and a small clink.</summary>
+        ItemPickup,
     }
 }

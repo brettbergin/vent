@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
@@ -401,6 +402,149 @@ namespace Vent.Editor
                 MetersPerTile = metersPerTile,
                 NormalStrength = 1f,
             };
+        }
+
+        /// <summary>
+        /// The building's floor plan, for the map the player can find: rooms filled by type, walls,
+        /// door gaps, the front door, the vents, and each room's name in the bitmap font. Transparent
+        /// outside the walls so it overlays the view; the transparent texels carry a paper colour so
+        /// the same image reads as a printed sheet on the opaque paper prop. <paramref name="worldRect"/>
+        /// is the world x/z extent the image covers, which the HUD uses to place the player.
+        /// </summary>
+        public static Texture2D BuildingMap(int cols, int rows, float cell, IReadOnlyList<BuildingGenerator.RoomType> plan, ISet<(int, int)> doors,
+            (int c, int r) lobby, IReadOnlyList<Vector3> vents, Vector3 frontDoor, float doorWidth, out Rect worldRect, string name = "BuildingMap")
+        {
+            const int width = 1024, margin = 40;
+            float scale = (width - 2f * margin) / (cols * cell);
+            int height = Mathf.RoundToInt(rows * cell * scale) + 2 * margin;
+            height += height % 2;
+            float worldW = width / scale, worldH = height / scale;
+            worldRect = new Rect(-worldW / 2f, -worldH / 2f, worldW, worldH);
+            Rect world = worldRect;
+
+            var pixels = new Color[width * height];
+            var paper = new Color(0.93f, 0.91f, 0.84f, 0f);
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                pixels[i] = paper;
+            }
+
+            int Px(float x) => Mathf.RoundToInt((x - world.xMin) * scale);
+            int Py(float z) => Mathf.RoundToInt((z - world.yMin) * scale);
+            void Fill(int x0, int y0, int x1, int y1, Color c)
+            {
+                for (int y = Mathf.Max(0, y0); y < Mathf.Min(height, y1); y++)
+                {
+                    for (int x = Mathf.Max(0, x0); x < Mathf.Min(width, x1); x++)
+                    {
+                        pixels[y * width + x] = c;
+                    }
+                }
+            }
+
+            Color RoomColor(BuildingGenerator.RoomType type) => type switch
+            {
+                BuildingGenerator.RoomType.Lobby => new Color(0.95f, 0.75f, 0.3f, 0.5f),
+                BuildingGenerator.RoomType.Conference => new Color(0.55f, 0.45f, 0.85f, 0.5f),
+                BuildingGenerator.RoomType.BreakRoom => new Color(0.9f, 0.5f, 0.35f, 0.5f),
+                BuildingGenerator.RoomType.Storage => new Color(0.6f, 0.62f, 0.66f, 0.5f),
+                BuildingGenerator.RoomType.ServerRoom => new Color(0.25f, 0.8f, 0.75f, 0.55f),
+                _ => new Color(0.35f, 0.55f, 0.9f, 0.5f),
+            };
+            string RoomName(BuildingGenerator.RoomType type) => type switch
+            {
+                BuildingGenerator.RoomType.Lobby => "LOBBY",
+                BuildingGenerator.RoomType.Conference => "MEETING",
+                BuildingGenerator.RoomType.BreakRoom => "BREAK ROOM",
+                BuildingGenerator.RoomType.Storage => "STORAGE",
+                BuildingGenerator.RoomType.ServerRoom => "SERVERS",
+                _ => "OFFICE",
+            };
+
+            var wall = new Color(0.08f, 0.09f, 0.12f, 0.95f);
+            var door = new Color(0.95f, 0.95f, 0.9f, 0.75f);
+            var ink = new Color(0.05f, 0.06f, 0.08f, 0.95f);
+            const int wallPx = 3;
+            int half = Mathf.RoundToInt(cell / 2f * scale);
+
+            // Rooms.
+            for (int r = 0; r < rows; r++)
+            {
+                for (int c = 0; c < cols; c++)
+                {
+                    Vector3 centre = BuildingGenerator.CellCenter(c, r, cols, rows, cell);
+                    int cx = Px(centre.x), cy = Py(centre.z);
+                    BuildingGenerator.RoomType type = plan != null && r * cols + c < plan.Count ? plan[r * cols + c] : BuildingGenerator.RoomType.Office;
+                    Fill(cx - half, cy - half, cx + half, cy + half, RoomColor(type));
+                }
+            }
+
+            // Walls: every cell's four edges (shared edges are drawn twice, which is harmless).
+            for (int r = 0; r < rows; r++)
+            {
+                for (int c = 0; c < cols; c++)
+                {
+                    Vector3 centre = BuildingGenerator.CellCenter(c, r, cols, rows, cell);
+                    int cx = Px(centre.x), cy = Py(centre.z);
+                    Fill(cx - half - wallPx, cy - half - wallPx, cx + half + wallPx, cy - half + wallPx, wall);
+                    Fill(cx - half - wallPx, cy + half - wallPx, cx + half + wallPx, cy + half + wallPx, wall);
+                    Fill(cx - half - wallPx, cy - half - wallPx, cx - half + wallPx, cy + half + wallPx, wall);
+                    Fill(cx + half - wallPx, cy - half - wallPx, cx + half + wallPx, cy + half + wallPx, wall);
+                }
+            }
+
+            // Doors: a gap in the wall the two cells share.
+            int gap = Mathf.RoundToInt(doorWidth / 2f * scale);
+            if (doors != null)
+            {
+                foreach ((int a, int b) in doors)
+                {
+                    int ac = a % cols, ar = a / cols, bc = b % cols, br = b / cols;
+                    Vector3 ca = BuildingGenerator.CellCenter(ac, ar, cols, rows, cell), cb = BuildingGenerator.CellCenter(bc, br, cols, rows, cell);
+                    int mx = Px((ca.x + cb.x) / 2f), my = Py((ca.z + cb.z) / 2f);
+                    if (ar == br)
+                    {
+                        Fill(mx - wallPx - 1, my - gap, mx + wallPx + 1, my + gap, door); // a wall running along z
+                    }
+                    else
+                    {
+                        Fill(mx - gap, my - wallPx - 1, mx + gap, my + wallPx + 1, door); // a wall running along x
+                    }
+                }
+            }
+
+            // The front door, on the lobby's outer wall, in the HUD's accent so it is the thing you look for.
+            var accent = new Color(1f, 0.69f, 0.19f, 0.95f);
+            int fx = Px(frontDoor.x), fy = Py(frontDoor.z);
+            Fill(fx - wallPx - 2, fy - gap, fx + wallPx + 2, fy + gap, accent);
+
+            // Vents: where the zombies come from.
+            var ventInk = new Color(0.85f, 0.15f, 0.12f, 0.95f);
+            if (vents != null)
+            {
+                foreach (Vector3 vent in vents)
+                {
+                    int vx = Px(vent.x), vy = Py(vent.z);
+                    Fill(vx - 4, vy - 4, vx + 4, vy + 4, ventInk);
+                }
+            }
+
+            // Room names, centred, in the bitmap font (GlyphFont counts rows from the top of the image).
+            for (int r = 0; r < rows; r++)
+            {
+                for (int c = 0; c < cols; c++)
+                {
+                    BuildingGenerator.RoomType type = plan != null && r * cols + c < plan.Count ? plan[r * cols + c] : BuildingGenerator.RoomType.Office;
+                    string label = RoomName(type);
+                    const int glyphScale = 2;
+                    Vector3 centre = BuildingGenerator.CellCenter(c, r, cols, rows, cell);
+                    int left = Px(centre.x) - GlyphFont.Width(label) * glyphScale / 2;
+                    int top = height - 1 - Py(centre.z) - GlyphFont.GlyphHeight * glyphScale / 2;
+                    GlyphFont.Draw(pixels, width, height, label, left, top, glyphScale, ink);
+                }
+            }
+
+            return WriteImage($"T_{name}", pixels, width, isNormal: false, hasAlpha: true, clamp: true, height: height);
         }
 
         private static Texture2D Write(string name, Color[] pixels, bool isNormal)

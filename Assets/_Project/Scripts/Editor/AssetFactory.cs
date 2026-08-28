@@ -59,6 +59,8 @@ namespace Vent.Editor
             a.Prompt = Event<StringEventChannel>("Evt_Prompt", "HUD interaction prompt (\"[E] OPEN DOOR\"); an empty string hides it. Raised by PlayerInteractor and the vehicle driver.");
             a.Announcement = Event<StringEventChannel>("Evt_Announcement", "Centre-screen banner: \"TITLE\\nSUBTITLE\". Raised by world events such as the front door unlocking.");
             a.Objective = Event<StringEventChannel>("Evt_Objective", "The key hunt's current step, shown as a standing line on the HUD; an empty string hides it.");
+            a.ItemCollected = Event<OfficeItemEventChannel>("Evt_ItemCollected", "The player picked up a building map or a rear-view mirror. The map arrives with its image and the world extent it covers.");
+            a.MapToggled = Event<VoidEventChannel>("Evt_MapToggled", "The map key was pressed. The HUD shows or hides the floor plan if the player is carrying one.");
             a.KeyFound = Event<VoidEventChannel>("Evt_KeyFound", "The front door key was taken from a desk drawer. The front door listens so it knows the player is carrying one.");
             a.VehicleSpeed = Event<FloatEventChannel>("Evt_VehicleSpeed", "Driven car speed in km/h while the player drives; -1 when they get out.");
 
@@ -413,6 +415,9 @@ namespace Vent.Editor
         /// tiling and no normal map, unlike <see cref="Lit"/>'s <c>TextureSet</c>. For the
         /// whiteboard, where the texture is a picture rather than a surface.
         /// </summary>
+        /// <summary>A lit material carrying an image; for art that only exists once a scene has been generated (the floor plan).</summary>
+        public static Material ImageMaterial(string name, Texture2D albedo, float smoothness) => LitImage(name, albedo, smoothness);
+
         private static Material LitImage(string name, Texture2D albedo, float smoothness)
         {
             Material m = GetOrCreateMaterial(name, "Universal Render Pipeline/Lit");

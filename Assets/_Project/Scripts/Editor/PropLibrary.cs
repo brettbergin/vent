@@ -529,6 +529,45 @@ namespace Vent.Editor
         /// above desk height, and carries its own small unshadowed light: whatever room it is in
         /// reads as "something is in here" from the door.
         /// </summary>
+        /// <summary>A printed floor plan on a desk: the map texture on a sheet of paper, a second sheet folded under it, and a collider so the interactor's ray finds it.</summary>
+        public static GameObject BuildingMapSheet(Transform parent, GameAssets a)
+        {
+            var root = new GameObject("BuildingMap");
+            root.transform.SetParent(parent, false);
+            Transform t = root.transform;
+            Box(t, "Under", new Vector3(0.02f, 0.003f, -0.01f), new Vector3(0.34f, 0.004f, 0.26f), a.Paper, collider: false)
+                .transform.localRotation = Quaternion.Euler(0f, 7f, 0f);
+            GameObject sheet = Box(t, "Sheet", new Vector3(0f, 0.008f, 0f), new Vector3(0.34f, 0.004f, 0.26f), a.BuildingMapPaper, collider: false);
+            sheet.transform.localRotation = Quaternion.Euler(0f, -5f, 0f);
+            // The map is drawn with north (+Z) up and east (+X) right; a cube's top face maps its texture that way already.
+            var collider = root.AddComponent<BoxCollider>();
+            collider.center = new Vector3(0f, 0.02f, 0f);
+            collider.size = new Vector3(0.36f, 0.05f, 0.28f);
+            return root;
+        }
+
+        /// <summary>A vanity mirror on a stand: a chrome disc in a dark rim, tilted back a little, that catches the room light from across it.</summary>
+        public static GameObject VanityMirror(Transform parent, GameAssets a)
+        {
+            var root = new GameObject("Mirror");
+            root.transform.SetParent(parent, false);
+            Transform t = root.transform;
+            Cyl(t, "Base", new Vector3(0f, 0.008f, 0f), 0.06f, 0.008f, a.MetalDark, collider: false);
+            Box(t, "Post", new Vector3(0f, 0.09f, -0.02f), new Vector3(0.012f, 0.16f, 0.012f), a.MetalDark, collider: false);
+            var head = new GameObject("Head");
+            head.transform.SetParent(t, false);
+            head.transform.localPosition = new Vector3(0f, 0.2f, -0.01f);
+            head.transform.localRotation = Quaternion.Euler(-12f, 0f, 0f);
+            Cyl(head.transform, "Rim", new Vector3(0f, 0f, -0.006f), 0.1f, 0.006f, a.MetalDark, collider: false)
+                .transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            Cyl(head.transform, "Glass", new Vector3(0f, 0f, 0.002f), 0.088f, 0.003f, a.Chrome, collider: false)
+                .transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            var collider = root.AddComponent<BoxCollider>();
+            collider.center = new Vector3(0f, 0.15f, 0f);
+            collider.size = new Vector3(0.22f, 0.32f, 0.12f);
+            return root;
+        }
+
         public static GameObject CableCoil(Transform parent, GameAssets a, System.Random rng)
         {
             var root = new GameObject("CableCoil");

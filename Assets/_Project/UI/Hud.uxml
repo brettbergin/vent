@@ -118,6 +118,21 @@
       </ui:Label>
     </ui:VisualElement>
 
+    <!-- Rear-view mirror: a live texture from the player's rear camera, mirrored so right stays right. -->
+    <ui:VisualElement name="mirror" class="mirror" picking-mode="Ignore">
+      <ui:VisualElement name="mirror-view" class="mirror__view" picking-mode="Ignore" />
+    </ui:VisualElement>
+
+    <!-- Building map: the floor plan drawn at regen, with the player's marker placed in code. -->
+    <ui:VisualElement name="map" class="map" picking-mode="Ignore">
+      <ui:VisualElement name="map-image" class="map__image" picking-mode="Ignore">
+        <ui:VisualElement name="map-marker" class="map__marker" picking-mode="Ignore">
+          <ui:VisualElement class="map__marker-nose" picking-mode="Ignore" />
+        </ui:VisualElement>
+      </ui:VisualElement>
+      <ui:Label name="map-hint" text="C   CLOSE MAP" class="map__hint" />
+    </ui:VisualElement>
+
     <ui:VisualElement name="speedo" class="speedo" picking-mode="Ignore">
       <ui:Label name="speedo-text" text="" class="speedo__text">
         <Bindings><ui:DataBinding property="text" data-source-path="SpeedText" binding-mode="ToTarget" /></Bindings>

@@ -29,6 +29,8 @@ namespace Vent.Player
     {
         [Header("References")]
         [SerializeField] private InputReader input;
+        [SerializeField, Tooltip("Raised on the map key; the HUD decides whether there is a map to show.")]
+        private VoidEventChannel mapToggled;
         [SerializeField] private UnityEngine.Camera viewCamera;
         [SerializeField, Tooltip("The overlay camera that draws the first-person guns; off while driving (the pistol is out of the window instead).")]
         private UnityEngine.Camera weaponCamera;
@@ -157,6 +159,7 @@ namespace Vent.Player
                 input.WeaponSlotSelected += OnWeaponSlotSelected;
                 input.WeaponCycled += OnWeaponCycled;
                 input.WeaponSwapPressed += OnWeaponSwapPressed;
+                input.MapPressed += OnMapPressed;
             }
 
             if (health != null && health.Died != null)
@@ -184,6 +187,7 @@ namespace Vent.Player
                 input.WeaponSlotSelected -= OnWeaponSlotSelected;
                 input.WeaponCycled -= OnWeaponCycled;
                 input.WeaponSwapPressed -= OnWeaponSwapPressed;
+                input.MapPressed -= OnMapPressed;
             }
 
             if (health != null && health.Died != null)
@@ -278,6 +282,21 @@ namespace Vent.Player
                 inventory?.Cycle(direction);
             }
         }
+
+        private void OnMapPressed()
+
+        {
+
+            if (IsAlive)
+
+            {
+
+                mapToggled?.Raise();
+
+            }
+
+        }
+
 
         private void OnWeaponSwapPressed()
         {
