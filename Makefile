@@ -3,8 +3,10 @@
 
 SHELL      := /usr/bin/env bash
 PROJECT    := $(CURDIR)
-VERSION    := $(shell sed -n 's/^m_EditorVersion: //p' ProjectSettings/ProjectVersion.txt)
-UNITY      ?= /Applications/Unity/Hub/Editor/$(VERSION)/Unity.app/Contents/MacOS/Unity
+# Not VERSION: `make release VERSION=0.2.0` would override it from the command line and send
+# every target looking for a Unity 0.2.0 that does not exist.
+UNITY_VER  := $(shell sed -n 's/^m_EditorVersion: //p' ProjectSettings/ProjectVersion.txt)
+UNITY      ?= /Applications/Unity/Hub/Editor/$(UNITY_VER)/Unity.app/Contents/MacOS/Unity
 APP        := Builds/Vent.app
 PLAYER_LOG := $(HOME)/Library/Logs/Vent Studio/Vent/Player.log
 
