@@ -142,7 +142,19 @@ namespace Vent.Core.Updates
 
                 // Work out now, not after a 78 MB download, whether we could install it.
                 Blocker = DescribeBlocker();
-                Debug.Log($"[Updater] {Decision.Version} available (installable: {string.IsNullOrEmpty(Blocker)})");
+                if (string.IsNullOrEmpty(Blocker))
+                {
+                    Debug.Log($"[Updater] {Decision.Version} available and installable");
+                }
+                else
+                {
+                    // Say which path was rejected and why. "installable: False" on its own is
+                    // useless in a player log from someone else's machine.
+                    InstallLocation where = ResolveLocation();
+                    Debug.Log($"[Updater] {Decision.Version} available but not installable: {Blocker} " +
+                              $"(blocker={where.Blocker}, dataPath={Application.dataPath}, root={where.Root ?? "?"})");
+                }
+
                 Set(UpdateState.Available);
             }
             catch (OperationCanceledException)

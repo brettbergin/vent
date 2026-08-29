@@ -17,20 +17,37 @@ namespace Vent.Tests.EditMode
             => InstallLocation.Resolve(dataPath, UpdatePlatform.Windows, isEditor: false);
 
         [Test]
-        public void ResolvesTheMacBundleFromItsDataFolder()
+        public void ResolvesTheMacBundleFromTheRealDataPath()
         {
-            InstallLocation loc = Mac("/Applications/Vent.app/Contents/Resources/Data");
-            Assert.IsTrue(loc.CanUpdate);
+            // What a macOS player actually reports: Application.dataPath is the bundle's
+            // Contents folder. Assuming Contents/Resources/Data made every macOS update fall
+            // back to "download it manually" — caught only by installing a release and watching.
+            InstallLocation loc = Mac("/Applications/Vent.app/Contents");
+            Assert.IsTrue(loc.CanUpdate, "Contents is the layout a real player reports");
             Assert.AreEqual("/Applications/Vent.app", loc.Root);
             Assert.AreEqual("/Applications/Vent.app", loc.LaunchTarget);
         }
 
         [Test]
+        public void AlsoAcceptsTheDataFolderLayout()
+        {
+            InstallLocation loc = Mac("/Applications/Vent.app/Contents/Resources/Data");
+            Assert.IsTrue(loc.CanUpdate);
+            Assert.AreEqual("/Applications/Vent.app", loc.Root);
+        }
+
+        [Test]
         public void HandlesAMacPathWithSpaces()
         {
-            InstallLocation loc = Mac("/Users/sam/My Games/Vent.app/Contents/Resources/Data");
+            InstallLocation loc = Mac("/Users/sam/My Games/Vent.app/Contents");
             Assert.IsTrue(loc.CanUpdate);
             Assert.AreEqual("/Users/sam/My Games/Vent.app", loc.Root);
+        }
+
+        [Test]
+        public void RefusesAContentsFolderThatIsNotInsideAnAppBundle()
+        {
+            Assert.IsFalse(Mac("/Users/sam/Downloads/Contents").CanUpdate);
         }
 
         [Test]
@@ -39,7 +56,7 @@ namespace Vent.Tests.EditMode
             // Gatekeeper runs a quarantined app from a random read-only mount; swapping there
             // would write to the wrong place and leave the real copy stale.
             InstallLocation loc = Mac(
-                "/private/var/folders/x4/abc/T/AppTranslocation/1E2D-44/d/Vent.app/Contents/Resources/Data");
+                "/private/var/folders/x4/abc/T/AppTranslocation/1E2D-44/d/Vent.app/Contents");
             Assert.IsFalse(loc.CanUpdate);
             Assert.AreEqual(InstallBlocker.Translocated, loc.Blocker);
             Assert.IsTrue(loc.BlockerMessage.Contains("Applications"));
@@ -88,7 +105,7 @@ namespace Vent.Tests.EditMode
         public void RefusesToRunFromTheEditor()
         {
             InstallLocation loc = InstallLocation.Resolve(
-                "/Applications/Vent.app/Contents/Resources/Data", UpdatePlatform.MacOS, isEditor: true);
+                "/Applications/Vent.app/Contents", UpdatePlatform.MacOS, isEditor: true);
             Assert.AreEqual(InstallBlocker.Editor, loc.Blocker);
         }
 

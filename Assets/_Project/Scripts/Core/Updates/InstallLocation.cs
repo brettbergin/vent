@@ -95,15 +95,20 @@ namespace Vent.Core.Updates
                 return Blocked(InstallBlocker.Translocated, UpdatePlatform.MacOS);
             }
 
-            // …/Vent.app/Contents/Resources/Data → walk up to the bundle.
-            const string suffix = ".app/Contents/Resources/Data";
-            if (!path.EndsWith(suffix, StringComparison.Ordinal))
+            // Application.dataPath on a macOS player is the bundle's Contents folder — NOT
+            // Contents/Resources/Data, which is where the data actually lives. Both are accepted
+            // so a change in either direction cannot silently stop every update again.
+            string bundle = null;
+            foreach (string suffix in new[] { "/Contents/Resources/Data", "/Contents" })
             {
-                return Blocked(InstallBlocker.Unrecognised, UpdatePlatform.MacOS);
+                if (path.EndsWith(suffix, StringComparison.Ordinal))
+                {
+                    bundle = path.Substring(0, path.Length - suffix.Length);
+                    break;
+                }
             }
 
-            string bundle = path.Substring(0, path.Length - "/Contents/Resources/Data".Length);
-            if (bundle.Length == 0 || bundle == "/")
+            if (string.IsNullOrEmpty(bundle) || bundle == "/" || !bundle.EndsWith(".app", StringComparison.Ordinal))
             {
                 return Blocked(InstallBlocker.Unrecognised, UpdatePlatform.MacOS);
             }
