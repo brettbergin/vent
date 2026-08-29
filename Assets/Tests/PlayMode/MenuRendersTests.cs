@@ -29,7 +29,7 @@ namespace Vent.Tests.PlayMode
             yield return SceneManager.LoadSceneAsync(SceneNames.Boot, LoadSceneMode.Single);
 
             GameManager manager = null;
-            float deadline = Time.realtimeSinceStartup + 10f;
+            float deadline = Time.realtimeSinceStartup + 60f;
             while (Time.realtimeSinceStartup < deadline)
             {
                 if (GameServices.TryGet(out manager) && manager.State == GameState.MainMenu)

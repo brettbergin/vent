@@ -24,7 +24,7 @@ namespace Vent.Tests.PlayMode
             GameServices.Clear();
             yield return SceneManager.LoadSceneAsync(SceneNames.Boot, LoadSceneMode.Single);
 
-            float deadline = Time.realtimeSinceStartup + 10f;
+            float deadline = Time.realtimeSinceStartup + 60f;
             GameManager manager = null;
             while (Time.realtimeSinceStartup < deadline)
             {
@@ -54,7 +54,7 @@ namespace Vent.Tests.PlayMode
             Assert.IsNotNull(playRequested, "Evt_PlayRequested asset must be loaded with the Boot scene");
             playRequested.Raise();
 
-            deadline = Time.realtimeSinceStartup + 15f;
+            deadline = Time.realtimeSinceStartup + 90f;
             while (Time.realtimeSinceStartup < deadline && manager.State != GameState.Playing)
             {
                 yield return null;

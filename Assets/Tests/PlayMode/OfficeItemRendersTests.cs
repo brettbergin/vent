@@ -34,7 +34,7 @@ namespace Vent.Tests.PlayMode
             GameServices.Clear();
             yield return SceneManager.LoadSceneAsync(SceneNames.Boot, LoadSceneMode.Single);
             GameManager manager = null;
-            float deadline = Time.realtimeSinceStartup + 10f;
+            float deadline = Time.realtimeSinceStartup + 60f;
             while (Time.realtimeSinceStartup < deadline && !(GameServices.TryGet(out manager) && manager.State == GameState.MainMenu))
             {
                 yield return null;
@@ -51,7 +51,7 @@ namespace Vent.Tests.PlayMode
             }
 
             play.Raise();
-            deadline = Time.realtimeSinceStartup + 15f;
+            deadline = Time.realtimeSinceStartup + 90f;
             while (Time.realtimeSinceStartup < deadline && manager.State != GameState.Playing)
             {
                 yield return null;

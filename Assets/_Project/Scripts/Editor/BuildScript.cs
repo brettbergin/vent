@@ -59,7 +59,20 @@ namespace Vent.Editor
                 options = BuildOptions.None,
             };
 
+            // Building for another platform switches the editor's active target and leaves it
+            // there, so every later editor run reimports every platform-dependent asset. That
+            // reimport is slow enough to blow the PlayMode smoke-test deadlines on the next run.
+            // Put the target back where we found it.
+            BuildTarget previous = EditorUserBuildSettings.activeBuildTarget;
+
             BuildReport report = BuildPipeline.BuildPlayer(options);
+
+            if (EditorUserBuildSettings.activeBuildTarget != previous)
+            {
+                EditorUserBuildSettings.SwitchActiveBuildTarget(
+                    BuildPipeline.GetBuildTargetGroup(previous), previous);
+            }
+
             BuildSummary summary = report.summary;
             Debug.Log($"[Vent] Build {summary.result}: {summary.totalSize / (1024 * 1024)} MB in {summary.totalTime.TotalSeconds:F0}s → {location}");
 
