@@ -1,0 +1,166 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, without the leading v (e.g. 0.2.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      licensed: ${{ steps.lic.outputs.licensed }}
+    steps:
+      # Without a Unity licence CI cannot build. Skip rather than fail: a release cut locally
+      # with `make release` already published its own tag and assets, and this run would only
+      # add a red X and try to create a release that exists.
+      - id: lic
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        run: |
+          if [ -n "$UNITY_LICENSE" ]; then
+            echo "licensed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "licensed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::UNITY_LICENSE is not set; skipping the CI build. This tag was expected to be released locally with 'make release'."
+          fi
+      - id: v
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            V="${{ github.event.inputs.version }}"
+          else
+            V="${GITHUB_REF_NAME#v}"
+          fi
+          echo "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "Bad version '$V'" >&2; exit 1; }
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+  windows:
+    name: Build Windows x64
+    needs: version
+    if: needs.version.outputs.licensed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-StandaloneWindows64-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: Library-StandaloneWindows64-
+
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          # BuildScript.ApplyVersion reads this. unity-builder's own `versioning` input does
+          # not apply when a custom buildMethod is used.
+          VENT_VERSION: ${{ needs.version.outputs.version }}
+        with:
+          unityVersion: auto
+          targetPlatform: StandaloneWindows64
+          buildMethod: Vent.Editor.BuildScript.BuildWindows
+          allowDirtyBuild: true
+
+      - name: Package
+        env:
+          VENT_VERSION: ${{ needs.version.outputs.version }}
+        run: ./tools/package.sh windows
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: dist/*.zip
+          retention-days: 1
+
+  macos:
+    name: Build macOS
+    needs: version
+    if: needs.version.outputs.licensed == 'true'
+    # Must be a macOS runner. An unsigned arm64 binary will not launch at all, and only macOS
+    # can apply the ad-hoc signature — the Linux mac-mono image cannot codesign.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-StandaloneOSX-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: Library-StandaloneOSX-
+
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          VENT_VERSION: ${{ needs.version.outputs.version }}
+        with:
+          unityVersion: auto
+          targetPlatform: StandaloneOSX
+          buildMethod: Vent.Editor.BuildScript.BuildMacOS
+          cacheUnityInstallationOnMac: true
+          allowDirtyBuild: true
+
+      - name: Package
+        env:
+          VENT_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          # The build step can leave the bundle without its executable bit; package.sh
+          # re-signs, and an unsigned binary would not launch on Apple Silicon.
+          chmod +x Builds/Vent.app/Contents/MacOS/Vent
+          ./tools/package.sh macos
+
+      # Upload the zip, not the raw bundle: GitHub artifacts do not preserve permissions.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-zip
+          path: dist/*.zip
+          retention-days: 1
+
+  release:
+    name: Publish release
+    needs: [version, windows, macos]
+    if: needs.version.outputs.licensed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Write the update manifest
+        env:
+          VENT_VERSION: ${{ needs.version.outputs.version }}
+          VENT_NOTES: Vent ${{ needs.version.outputs.version }}
+        run: |
+          ls -lh dist
+          ./tools/manifest.sh
+          cat dist/latest.json
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          V: ${{ needs.version.outputs.version }}
+        run: |
+          # latest.json is what installed copies poll, so it has to be attached to the
+          # release that /releases/latest resolves to.
+          gh release create "v$V" \
+            "dist/Vent-$V-macOS.zip" \
+            "dist/Vent-$V-Windows-x64.zip" \
+            dist/latest.json \
+            dist/SHA256SUMS.txt \
+            --title "Vent $V" \
+            --generate-notes \
+            --repo "$GITHUB_REPOSITORY"

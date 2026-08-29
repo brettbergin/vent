@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -222,6 +223,11 @@ namespace Vent.Editor
         {
             PlayerSettings.productName = "Vent";
             PlayerSettings.companyName = "Vent Studio";
+
+            // A real bundle identifier, not the URP template's. macOS seals it into the ad-hoc
+            // signature and the release zips are downloaded by strangers, so it has to be ours.
+            // bundleVersion is deliberately not set here: BuildScript takes it from VENT_VERSION.
+            PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Standalone, "com.ventstudio.vent");
             PlayerSettings.runInBackground = true;
             PlayerSettings.colorSpace = ColorSpace.Linear;
             PlayerSettings.defaultScreenWidth = 1600;

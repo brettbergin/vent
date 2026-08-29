@@ -66,6 +66,21 @@ namespace Vent.Tests.PlayMode
             Assert.Greater(bound.width, 0f, "Play button must be laid out with a real width (panel rendered).");
             Assert.Greater(bound.height, 0f, "Play button must be laid out with a real height (panel rendered).");
 
+            // The version label exists so a screenshot or a bug report names the build.
+            Label version = menu.rootVisualElement.Q<Label>("version-label");
+            Assert.IsNotNull(version, "The menu must show which version is running.");
+            Assert.IsNotEmpty(version.text, "The version label must be filled in.");
+            StringAssert.StartsWith("v", version.text);
+            Debug.Log($"[Vent][test] version label = {version.text}");
+
+            // The update banner is laid out but must stay out of the way until a check finds
+            // something. UpdateService does not exist in the editor at all, so this is also the
+            // guard that a null service leaves the menu looking normal.
+            VisualElement updatePanel = menu.rootVisualElement.Q<VisualElement>("update-panel");
+            Assert.IsNotNull(updatePanel, "The update banner must be present in the menu tree.");
+            Assert.AreEqual(DisplayStyle.None, updatePanel.resolvedStyle.display,
+                            "The update banner must be hidden when there is no update.");
+
             Object.Destroy(manager.gameObject);
             yield return null;
         }

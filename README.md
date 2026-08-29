@@ -9,14 +9,39 @@ Everything — geometry, prefabs, meshes, textures, materials, data, scenes, sou
 from code**. There is no binary art in the repository; a clean checkout rebuilds the project with one
 command.
 
-## Quick start
+## Download and play
+
+Grab the latest build from **[Releases](https://github.com/brettbergin/vent/releases/latest)** —
+macOS (Apple Silicon and Intel) or Windows x64. No Unity, no build step.
+
+The game is not code-signed, so the first launch needs one extra step. After that it updates
+itself: Vent checks GitHub on launch and offers to download and restart into the new version, and
+because those updates never come through a browser they carry no quarantine flag and never prompt
+again.
+
+**macOS** — unzip, drag `Vent.app` to your Applications folder, then run:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Vent.app
+```
+
+The old right-click ▸ *Open* trick no longer works on macOS 15 and later. If you would rather not
+use Terminal: double-click the app, let it be blocked, then allow it in
+**System Settings ▸ Privacy & Security ▸ Open Anyway**. Moving the app to Applications matters —
+run it from Downloads and macOS launches it from a read-only copy, which blocks self-updates.
+
+**Windows** — unzip the whole folder somewhere writable (your user folder, not `Program Files`) and
+run `Vent.exe`. SmartScreen will warn about an unknown publisher: **More info ▸ Run anyway**. Keep
+`Vent.exe` next to `Vent_Data`.
+
+## Build from source
 
 ```bash
 make regen    # regenerate every asset, prefab and scene   (Unity menu: Vent ▸ Rebuild Everything)
 make test     # EditMode (pure logic) + PlayMode (end to end in the generated scene), headless
 make build    # macOS player → Builds/Vent.app             (make build-windows for Windows x64)
 make run      # launch it
-make help     # everything else: windowed tests, editor, logs, GPU benchmark, clean
+make help     # everything else: packaging, releases, windowed tests, editor, logs, GPU benchmark
 ```
 
 Or open the project, run **Vent ▸ Rebuild Everything**, open `Assets/_Project/Scenes/Boot.unity`
@@ -131,26 +156,64 @@ discrete GPU to a few percent, and no build runs well on that.
 
 ## Tests
 
-- **EditMode** (`Assets/Tests/EditMode`, 132): every pure rule (progression, levels, difficulty,
+- **EditMode** (`Assets/Tests/EditMode`, 207): every pure rule (progression, levels, difficulty,
   ballistics, front door, key hunt, tyre/suspension/steering/drivetrain models), the room-type quotas
-  over five thousand seeds, layers and the collision matrix, the generated prefabs and scenes, and
-  that every `MonoBehaviour` lives in a file named after it.
+  over five thousand seeds, layers and the collision matrix, the generated prefabs and scenes,
+  the updater's version comparison, manifest parsing, install-path resolution and generated helper
+  scripts, and that every `MonoBehaviour` lives in a file named after it.
 - **PlayMode** (`Assets/Tests/PlayMode`, 53): the generated building end to end — spawning, chasing,
   killing with credit, levelling, the door, the whole key chain, getting in and out of cars, drive-by,
   roadkill — plus `VehicleHandlingTests`, which drives the sedan on a proving ground: top speed
   through the gears, braking, full lock at top speed on all four wheels, handbrake slide, a kerb at
   speed, reverse, straight hands-off. Five tests need a GPU or real input and run under `make test-gui`.
 
-Last verified on 6000.3.22f1 (macOS): regen, EditMode 132/132, PlayMode 48/48 + 5 GPU-only, GUI
-render tests 3/3, `tools/build.sh` → `Builds/Vent.app`.
+Last verified on 6000.3.22f1 (macOS): EditMode 207/207, PlayMode 53/53 + 6 headless-only,
+`tools/build.sh` → `Builds/Vent.app`, `tools/package.sh` → `dist/`.
+
+## Releasing
+
+A release is a git tag. `v0.2.0` builds both players, stamps them `0.2.0`, and publishes two zips
+plus `latest.json` — the manifest installed copies poll.
+
+```bash
+make release VERSION=0.2.0                 # test, build both, package, tag, publish
+make release VERSION=0.2.0 ARGS=--dry-run  # everything except the tag and the release
+make package                               # just zip what is already in Builds/
+```
+
+Pushing the tag runs the same thing on GitHub Actions (`.github/workflows/release.yml`), which
+needs `UNITY_LICENSE`, `UNITY_EMAIL` and `UNITY_PASSWORD` as repository secrets. **Until those are
+set both workflows skip themselves** with a note rather than failing — releases are cut locally in
+the meantime, and CI starts working the moment the secrets appear. The local path exists because
+Unity's licensing on ephemeral CI runners is the flakiest part of the pipeline; if CI cannot
+activate, `make release` still ships.
+
+The version reaches the player through the `VENT_VERSION` environment variable, which
+`BuildScript.ApplyVersion` writes to `PlayerSettings.bundleVersion` — so it surfaces as
+`Application.version`, which is what the updater compares. A plain `make build` leaves it alone.
+
+**How updating works.** `UpdateService` (`Core/Updates`) installs itself after the first scene
+loads, the way `FrameRateLog` does — nothing in the generated Boot scene references it, so the
+updater needs no regen. It fetches `latest.json` from the `/releases/latest/download/` permalink
+(the REST API allows only 60 unauthenticated requests an hour), and the main menu shows a banner.
+Accepting it streams the platform zip to `persistentDataPath`, checks its SHA-256, writes a
+detached helper script, and quits so the helper can replace files the running process holds open.
+macOS unpacks with `ditto` (`System.IO.Compression` drops the executable bit and the bundle stops
+launching) and moves the old bundle aside so a failed copy rolls back; Windows mirrors with
+`robocopy /MIR`. It refuses to install — and links the release page instead — from the editor, from
+a translocated bundle, from a folder it cannot write, or when the install does not look like Vent.
+The decision logic, path resolution and script generation are pure and unit tested, because that is
+the code that overwrites someone's game.
 
 ## Layout
 
 ```
 Assets/_Project/Scripts/{Core,Player,Weapons,Enemies,Vehicles,Gameplay,UI,Editor}   one asmdef each
+Assets/_Project/Scripts/Core/Updates                                                the self-updater
 Assets/_Project/{Data,Prefabs,Materials,Textures,Meshes,Scenes,UI}                  generated (UXML/USS hand-written)
 Assets/_Project/Shaders                                                             the foliage shader
 Assets/Tests/{EditMode,PlayMode}
 Assets/Settings                                                                     URP assets
-tools/                                                                              regen / test / build / gpubench
+tools/                                                                              regen / test / build / package / release / gpubench
+.github/workflows/                                                                  tests on push, release on a v* tag
 ```

@@ -9,7 +9,7 @@ APP        := Builds/Vent.app
 PLAYER_LOG := $(HOME)/Library/Logs/Vent Studio/Vent/Player.log
 
 .DEFAULT_GOAL := help
-.PHONY: help regen test test-edit test-play test-gui build build-windows run open logs player-log gpubench clean check
+.PHONY: help regen test test-edit test-play test-gui test-update build build-windows package release run open logs player-log gpubench clean check
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -38,11 +38,22 @@ test-gui: ## PlayMode tests in a windowed editor: also runs the input and render
 	  -testResults "$(PROJECT)/TestResults/PlayMode-gui.xml" -logFile "$(PROJECT)/Logs/test-PlayMode-gui.log" $(if $(FILTER),-testFilter $(FILTER),); \
 	  python3 tools/summarize-tests.py TestResults/PlayMode-gui.xml
 
+test-update: ## Exercise the macOS self-update against a throwaway install (make build first)
+	@UNITY="$(UNITY)" ./tools/test-update-swap.sh
+
 build: ## Build the macOS player into Builds/Vent.app
 	@UNITY="$(UNITY)" ./tools/build.sh
 
 build-windows: ## Build the Windows x64 player into Builds/Windows/ (needs the Windows Build Support module)
 	@UNITY="$(UNITY)" ./tools/build-windows.sh
+
+package: ## Zip the built players into dist/ with checksums and the update manifest
+	@./tools/package.sh all
+	@./tools/manifest.sh
+
+release: ## Cut a release end to end: test, build both players, package, tag, publish (VERSION=0.2.0)
+	@test -n "$(VERSION)" || { echo "Usage: make release VERSION=0.2.0 [ARGS=--dry-run]" >&2; exit 1; }
+	@UNITY="$(UNITY)" ./tools/release.sh "$(VERSION)" $(ARGS)
 
 run: ## Launch the built player (make build first)
 	@test -d "$(APP)" || { echo "No build at $(APP); run 'make build'." >&2; exit 1; }
@@ -64,5 +75,5 @@ player-log: ## Show errors/exceptions from the last player session
 check: regen test ## Regenerate, then run the headless suites (what CI should do)
 
 clean: ## Remove build output, test results and logs (never touches Library/)
-	@rm -rf Builds TestResults Logs
-	@echo "cleaned Builds/ TestResults/ Logs/"
+	@rm -rf Builds TestResults Logs dist
+	@echo "cleaned Builds/ TestResults/ Logs/ dist/"

@@ -80,3 +80,42 @@
 .settings .unity-base-slider__tracker { background-color: rgba(255,255,255,0.15); }
 .settings .unity-toggle__checkmark { background-color: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); }
 .hidden { display: none; }
+
+/* Update banner. Sits under the menu buttons and stays hidden until a check finds something. */
+.update {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top-width: 1px;
+    border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+.update__status {
+    font-size: 14px;
+    color: var(--accent);
+    letter-spacing: 1px;
+    white-space: normal;
+    margin-bottom: 8px;
+}
+
+.update__status--muted { color: var(--muted); }
+
+.update__row { flex-direction: row; }
+
+.menu-button--small {
+    height: 34px;
+    font-size: 15px;
+    flex-grow: 1;
+    margin-right: 6px;
+}
+
+.menu-button--small:last-child { margin-right: 0; }
+
+/* Bottom-right, out of the way: it exists so a bug report can name the build. */
+.version {
+    position: absolute;
+    right: 14px;
+    bottom: 10px;
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 1px;
+}

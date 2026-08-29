@@ -21,8 +21,29 @@ namespace Vent.Editor
             Build(BuildTarget.StandaloneWindows64, "Builds/Windows/Vent.exe");
         }
 
+        /// <summary>
+        /// The release version comes from the git tag, handed down as VENT_VERSION by
+        /// tools/release.sh and by the CI workflow. Unset (a plain local <c>make build</c>) leaves
+        /// whatever is in ProjectSettings alone. ProjectBootstrap never writes bundleVersion, so a
+        /// regen cannot stomp what we set here.
+        /// </summary>
+        private static void ApplyVersion()
+        {
+            string version = System.Environment.GetEnvironmentVariable("VENT_VERSION");
+            if (string.IsNullOrWhiteSpace(version))
+            {
+                Debug.Log($"[Vent] VENT_VERSION unset; building as {PlayerSettings.bundleVersion}");
+                return;
+            }
+
+            PlayerSettings.bundleVersion = version.Trim();
+            Debug.Log($"[Vent] Building version {PlayerSettings.bundleVersion}");
+        }
+
         private static void Build(BuildTarget target, string location)
         {
+            ApplyVersion();
+
             var scenes = new string[SceneNames.BuildOrder.Length];
             for (int i = 0; i < scenes.Length; i++)
             {

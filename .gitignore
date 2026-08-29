@@ -34,3 +34,4 @@ crashlytics-build.properties
 .DS_Store
 TestResults/
 *.log
+dist/
