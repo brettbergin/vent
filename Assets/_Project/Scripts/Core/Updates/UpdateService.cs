@@ -32,8 +32,15 @@ namespace Vent.Core.Updates
 
         public static UpdateService Instance { get; private set; }
 
-        /// <summary>Raised on the main thread whenever <see cref="State"/> or <see cref="Progress"/> moves.</summary>
-        public event Action Changed;
+        /// <summary>
+        /// Raised on the main thread whenever <see cref="State"/> or <see cref="Progress"/> moves.
+        ///
+        /// Static on purpose. The service is created by a RuntimeInitializeOnLoadMethod that runs
+        /// after the first scene has loaded, which is later than the menu's Bind — an instance
+        /// event meant the UI subscribed to nothing and the banner never appeared however well the
+        /// check worked. Subscribers must not depend on the order the two come up in.
+        /// </summary>
+        public static event Action Changed;
 
         public UpdateState State { get; private set; } = UpdateState.Idle;
         public UpdateDecision Decision { get; private set; } = UpdateDecision.None;
@@ -109,6 +116,15 @@ namespace Vent.Core.Updates
             State = state;
             Changed?.Invoke();
         }
+
+        private static void Notify() => Changed?.Invoke();
+
+        /// <summary>
+        /// Whether anything is listening. Exists so a test can prove the menu subscribed even
+        /// though the service itself never exists in the editor — the ordering bug that shipped
+        /// in 0.2.0 through 0.2.2 was invisible to every test that only checked the hidden case.
+        /// </summary>
+        public static bool HasListeners => Changed != null;
 
         // ------------------------------------------------------------------ check
 
@@ -218,7 +234,7 @@ namespace Vent.Core.Updates
                     Decision.Asset.url,
                     zipPath,
                     Decision.Asset.sha256,
-                    p => { Progress = p; Changed?.Invoke(); },
+                    p => { Progress = p; Notify(); },
                     cts.Token);
 
                 if (!ok)

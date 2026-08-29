@@ -19,6 +19,7 @@ namespace Vent.UI.Screens
         private VisualElement root;
 
         private VisualElement updatePanel;
+        private bool updateBannerShown;
         private Label updateStatus;
         private Button updateAction;
         private Button updateDismiss;
@@ -75,21 +76,17 @@ namespace Vent.UI.Screens
             Click(updateAction, OnUpdateAction);
             Click(updateDismiss, () => UpdateService.Instance?.Skip());
 
-            if (UpdateService.Instance != null)
-            {
-                UpdateService.Instance.Changed += RefreshUpdate;
-            }
+            // Subscribe unconditionally: the service is created after the first scene loads,
+            // which is later than this runs, so testing Instance for null here would silently
+            // subscribe to nothing and the banner would never appear.
+            UpdateService.Changed += RefreshUpdate;
 
             RefreshUpdate();
         }
 
         protected override void Unbind()
         {
-            if (UpdateService.Instance != null)
-            {
-                UpdateService.Instance.Changed -= RefreshUpdate;
-            }
-
+            UpdateService.Changed -= RefreshUpdate;
             base.Unbind();
         }
 
@@ -124,10 +121,20 @@ namespace Vent.UI.Screens
             if (service == null || !service.HasUpdate)
             {
                 SetHidden(updatePanel, true);
+                updateBannerShown = false;
                 return;
             }
 
             SetHidden(updatePanel, false);
+
+            // Say it once, so a player log shows whether the banner actually reached the screen
+            // and not merely that the check found something.
+            if (!updateBannerShown)
+            {
+                updateBannerShown = true;
+                Debug.Log($"[Updater] banner shown for {service.Decision.Version}");
+            }
+
             bool installable = service.Decision.CanInstall && string.IsNullOrEmpty(service.Blocker);
 
             switch (service.State)
@@ -185,6 +192,10 @@ namespace Vent.UI.Screens
         {
             SetHidden(settingsPanel, true);
             SettingsPanelBinder.Refresh(settingsPanel);
+
+            // Re-sync on the way in as well as on the event, so coming back from a run always
+            // shows the current state even if the check landed while the menu was hidden.
+            RefreshUpdate();
             FocusFirst(root);
         }
 

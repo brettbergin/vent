@@ -8,6 +8,7 @@ using UnityEngine.UIElements;
 using Vent.Core;
 using Vent.Core.Services;
 using Vent.Core.Utility;
+using Vent.Core.Updates;
 using Vent.Gameplay.Flow;
 
 namespace Vent.Tests.PlayMode
@@ -80,6 +81,13 @@ namespace Vent.Tests.PlayMode
             Assert.IsNotNull(updatePanel, "The update banner must be present in the menu tree.");
             Assert.AreEqual(DisplayStyle.None, updatePanel.resolvedStyle.display,
                             "The update banner must be hidden when there is no update.");
+
+            // The menu binds before UpdateService is created, and the service never exists in the
+            // editor at all. Subscribing only when Instance is non-null therefore subscribed to
+            // nothing, and the banner stayed hidden no matter what the check found — while the
+            // assertion above still passed. Pin the subscription itself.
+            Assert.IsTrue(UpdateService.HasListeners,
+                          "The menu must subscribe to update notifications even when no service exists yet.");
 
             Object.Destroy(manager.gameObject);
             yield return null;
